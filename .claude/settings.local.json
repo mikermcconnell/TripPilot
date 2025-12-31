@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install)",
+      "Bash(npm run build:*)",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "mcp__browsermcp__browser_navigate",
+      "mcp__browsermcp__browser_get_console_logs",
+      "mcp__browsermcp__browser_wait",
+      "WebSearch",
+      "mcp__Ref__ref_read_url",
+      "Bash(cd:*)",
+      "Bash(cat:*)",
+      "Bash(xargs cat:*)",
+      "Bash(find:*)",
+      "Bash(wc:*)",
+      "Bash(dir:*)",
+      "Bash(npx vite build)",
+      "Bash(timeout /t 5)",
+      "Bash(git init:*)",
+      "Bash(git remote add:*)",
+      "Bash(git add:*)",
+      "Bash(del nul)"
+    ]
+  }
+}

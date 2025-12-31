@@ -1,0 +1,456 @@
+import React, { useEffect, useState } from 'react';
+import { DayItinerary, Activity } from '@/types';
+import { Calendar, MapPin, Coffee, Bed, Car, Camera, Trash2, Timer, Pencil, Edit3 } from 'lucide-react';
+import { ActivityDetail } from '@/components/features/activity/ActivityDetail';
+import { ActivityEditModal } from '@/components/features/activity/ActivityEditModal';
+import { useUIStore } from '@/stores/uiStore';
+
+/**
+ * Parse time string to minutes since midnight
+ */
+function parseTimeToMinutes(timeStr: string): number | null {
+  if (!timeStr) return null;
+
+  // Handle "HH:MM AM/PM" format
+  const match = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+  if (!match) return null;
+
+  let hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  const period = match[3]?.toUpperCase();
+
+  if (period === 'PM' && hours !== 12) hours += 12;
+  if (period === 'AM' && hours === 12) hours = 0;
+
+  return hours * 60 + minutes;
+}
+
+/**
+ * Calculate duration between two time strings
+ */
+function calculateDuration(startTime: string, endTime: string): string | null {
+  const startMins = parseTimeToMinutes(startTime);
+  const endMins = parseTimeToMinutes(endTime);
+
+  if (startMins === null || endMins === null) return null;
+
+  let durationMins = endMins - startMins;
+  if (durationMins < 0) durationMins += 24 * 60; // Handle overnight
+
+  const hours = Math.floor(durationMins / 60);
+  const mins = durationMins % 60;
+
+  if (hours === 0) return `${mins}m`;
+  if (mins === 0) return `${hours}h`;
+  return `${hours}h ${mins}m`;
+}
+
+/**
+ * Calculate time gap between activities
+ */
+function calculateTimeGap(activity1EndTime: string | undefined, activity1Time: string | undefined, activity2Time: string | undefined): string | null {
+  const endTime = activity1EndTime || activity1Time;
+  if (!endTime || !activity2Time) return null;
+
+  const endMins = parseTimeToMinutes(endTime);
+  const startMins = parseTimeToMinutes(activity2Time);
+
+  if (endMins === null || startMins === null) return null;
+
+  let gapMins = startMins - endMins;
+  if (gapMins <= 0) return null; // No gap or overlapping
+
+  if (gapMins < 15) return null; // Ignore tiny gaps
+
+  const hours = Math.floor(gapMins / 60);
+  const mins = gapMins % 60;
+
+  if (hours === 0) return `${mins}m gap`;
+  if (mins === 0) return `${hours}h gap`;
+  return `${hours}h ${mins}m gap`;
+}
+
+interface ItineraryViewProps {
+  days: DayItinerary[];
+  activeDayId: string | null;
+  onDaySelect: (id: string) => void;
+  onDeleteActivity: (dayId: string, activityId: string) => void;
+  onUpdateActivity?: (dayId: string, activityId: string, updatedActivity: Activity) => void;
+
+  // Interaction props
+  hoveredActivityId: string | null;
+  selectedActivityId: string | null;
+  onActivityHover: (id: string | null) => void;
+  onActivitySelect: (id: string | null) => void;
+}
+
+/**
+ * Activity type color schemes
+ */
+const ACTIVITY_TYPE_STYLES: Record<string, { icon: React.ReactNode; bg: string; border: string; text: string }> = {
+  food: {
+    icon: <Coffee className="w-5 h-5" />,
+    bg: 'bg-orange-50',
+    border: 'border-orange-200',
+    text: 'text-orange-600'
+  },
+  lodging: {
+    icon: <Bed className="w-5 h-5" />,
+    bg: 'bg-indigo-50',
+    border: 'border-indigo-200',
+    text: 'text-indigo-600'
+  },
+  travel: {
+    icon: <Car className="w-5 h-5" />,
+    bg: 'bg-blue-50',
+    border: 'border-blue-200',
+    text: 'text-blue-600'
+  },
+  activity: {
+    icon: <Camera className="w-5 h-5" />,
+    bg: 'bg-emerald-50',
+    border: 'border-emerald-200',
+    text: 'text-emerald-600'
+  }
+};
+
+const getActivityTypeStyles = (type: string) => {
+  return ACTIVITY_TYPE_STYLES[type] || ACTIVITY_TYPE_STYLES.activity;
+};
+
+const ItineraryView: React.FC<ItineraryViewProps> = ({
+  days,
+  activeDayId,
+  onDaySelect,
+  onDeleteActivity,
+  onUpdateActivity,
+  hoveredActivityId,
+  selectedActivityId,
+  onActivityHover,
+  onActivitySelect
+}) => {
+  const [detailActivity, setDetailActivity] = useState<{ activity: Activity; dayId: string } | null>(null);
+  const [editActivity, setEditActivity] = useState<{ activity: Activity; dayId: string } | null>(null);
+
+  // Scroll selected activity into view
+  useEffect(() => {
+    if (selectedActivityId) {
+      const element = document.getElementById(`activity-${selectedActivityId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        // Ensure the parent day is active (Bi-directional sync)
+        const dayId = days.find(d => d.activities.some(a => a.id === selectedActivityId))?.id;
+        if (dayId && dayId !== activeDayId) {
+          onDaySelect(dayId);
+        }
+      }
+    }
+  }, [selectedActivityId, days, activeDayId, onDaySelect]);
+
+  const handleActivityClick = (activity: Activity, dayId: string) => {
+    setDetailActivity({ activity, dayId });
+  };
+
+  const handleEditClick = () => {
+    if (detailActivity) {
+      setEditActivity(detailActivity);
+      setDetailActivity(null);
+    }
+  };
+
+  const handleSaveActivity = (updatedActivity: Activity) => {
+    if (editActivity && onUpdateActivity) {
+      onUpdateActivity(editActivity.dayId, editActivity.activity.id, updatedActivity);
+      setEditActivity(null);
+    }
+  };
+
+  // Handle empty state
+  if (days.length === 0) {
+    return (
+      <div className="h-full bg-gradient-to-b from-emerald-50/50 to-slate-50/30">
+        {/* View Theme Header */}
+        <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-4 mb-4">
+          <div className="flex items-center gap-3 text-white/80 text-xs font-bold uppercase tracking-widest mb-1">
+            <Calendar className="w-4 h-4" />
+            Daily Itinerary
+          </div>
+          <h2 className="text-xl font-extrabold text-white">Your Journey</h2>
+        </div>
+
+        <div className="flex items-center justify-center h-[calc(100%-120px)]">
+          <div className="text-center p-8">
+            <Calendar className="w-16 h-16 text-emerald-200 mx-auto mb-4" />
+            <h3 className="text-lg font-bold text-slate-600 mb-2">
+              Your Itinerary Awaits
+            </h3>
+            <p className="text-sm text-slate-500 mb-4 max-w-xs mx-auto">
+              No activities scheduled yet. Chat with TripPilot to start planning your perfect day!
+            </p>
+            <div className="bg-emerald-50 border-2 border-emerald-100 rounded-xl p-4 max-w-xs mx-auto">
+              <p className="text-xs font-bold text-emerald-600 mb-2">Try asking:</p>
+              <p className="text-sm text-emerald-700 italic">"Plan a day exploring Dublin with lunch at a traditional pub"</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const { setViewMode } = useUIStore();
+
+  return (
+    <div className="h-full overflow-y-auto custom-scrollbar bg-gradient-to-b from-emerald-50/50 to-slate-50/30">
+      {/* View Theme Header */}
+      <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-4 mb-4">
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-3 text-white/80 text-xs font-bold uppercase tracking-widest">
+            <Calendar className="w-4 h-4" />
+            Daily Itinerary
+          </div>
+          <button
+            onClick={() => setViewMode('planner')}
+            className="flex items-center gap-2 px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors text-sm font-medium"
+          >
+            <Edit3 size={14} />
+            <span>Edit Trip</span>
+          </button>
+        </div>
+        <h2 className="text-xl font-extrabold text-white">Your Journey</h2>
+      </div>
+
+      <div className="px-6">
+
+        <div className="space-y-6">
+          {days.map((day) => {
+            const isActive = activeDayId === day.id;
+            
+            return (
+              <div 
+                key={day.id} 
+                id={`day-${day.id}`}
+                onClick={() => onDaySelect(day.id)}
+                className={`
+                  relative transition-all duration-200 cursor-pointer rounded-2xl
+                  ${isActive 
+                    ? 'bg-white border-2 border-blue-400 ring-4 ring-blue-100/50 z-10' 
+                    : 'bg-white border-2 border-slate-200 hover:border-slate-300 hover:translate-y-[-2px]'}
+                `}
+              >
+                {/* Day Header with Summary Stats */}
+                <div className={`p-4 rounded-t-2xl border-b-2 ${isActive ? 'bg-blue-50 border-blue-100' : 'bg-transparent border-slate-100'}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className={`
+                        w-12 h-12 rounded-2xl border-b-4 flex items-center justify-center font-black text-lg
+                        ${isActive
+                          ? 'bg-blue-500 border-blue-700 text-white'
+                          : 'bg-slate-200 border-slate-300 text-slate-500'}
+                      `}>
+                        {day.dayNumber}
+                      </div>
+                      <div>
+                        <h3 className={`font-bold text-lg ${isActive ? 'text-blue-900' : 'text-slate-700'}`}>
+                          Day {day.dayNumber}
+                        </h3>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">{day.date}</p>
+                      </div>
+                    </div>
+
+                    {/* Day Stats */}
+                    <div className="flex items-center gap-3">
+                      {day.activities.length > 0 && (
+                        <>
+                          <div className="text-center px-2">
+                            <div className="text-lg font-black text-slate-600">{day.activities.length}</div>
+                            <div className="text-[10px] font-bold text-slate-400 uppercase">Activities</div>
+                          </div>
+                          {day.activities.some(a => a.type === 'food') && (
+                            <div className="w-6 h-6 bg-orange-100 rounded-lg flex items-center justify-center">
+                              <Coffee className="w-3.5 h-3.5 text-orange-500" />
+                            </div>
+                          )}
+                          {day.activities.some(a => a.type === 'travel') && (
+                            <div className="w-6 h-6 bg-blue-100 rounded-lg flex items-center justify-center">
+                              <Car className="w-3.5 h-3.5 text-blue-500" />
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Activities List */}
+                <div className="p-3 space-y-1">
+                  {day.activities.map((activity, activityIndex) => {
+                    const isHovered = hoveredActivityId === activity.id;
+                    const isSelected = selectedActivityId === activity.id;
+                    const duration = activity.time && activity.endTime
+                      ? calculateDuration(activity.time, activity.endTime)
+                      : null;
+
+                    // Calculate time gap from previous activity
+                    const prevActivity = activityIndex > 0 ? day.activities[activityIndex - 1] : null;
+                    const timeGap = prevActivity
+                      ? calculateTimeGap(prevActivity.endTime, prevActivity.time, activity.time)
+                      : null;
+
+                    // Get activity type styles
+                    const typeStyles = getActivityTypeStyles(activity.type);
+
+                    return (
+                      <React.Fragment key={activity.id}>
+                        {/* Time Gap Indicator */}
+                        {timeGap && (
+                          <div className="flex items-center justify-center py-1">
+                            <div className="flex items-center gap-2 px-3 py-1 bg-amber-50 border border-amber-200 rounded-full text-[10px] font-bold text-amber-600">
+                              <Timer className="w-3 h-3" />
+                              {timeGap}
+                            </div>
+                          </div>
+                        )}
+
+                        <div
+                          id={`activity-${activity.id}`}
+                          onMouseEnter={() => onActivityHover(activity.id)}
+                          onMouseLeave={() => onActivityHover(null)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onActivitySelect(activity.id);
+                            handleActivityClick(activity, day.id);
+                          }}
+                          className={`
+                            relative group border-2 rounded-xl p-3 transition-all duration-200 scroll-mt-24 cursor-pointer border-l-4
+                            ${isHovered || isSelected
+                              ? 'border-blue-400 bg-blue-50/50 scale-[1.02] shadow-sm z-10'
+                              : `${typeStyles.bg} ${typeStyles.border} hover:border-slate-300`}
+                            ${isSelected ? 'ring-2 ring-blue-200' : ''}
+                          `}
+                        >
+                          <div className="flex items-start gap-4">
+                            {/* Time Column */}
+                            {activity.time && (
+                              <div className="flex flex-col items-center min-w-[60px]">
+                                <span className={`text-sm font-black ${typeStyles.text}`}>
+                                  {activity.time}
+                                </span>
+                                {duration && (
+                                  <span className="text-[10px] font-bold text-slate-400 bg-white/80 px-1.5 py-0.5 rounded mt-1">
+                                    {duration}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
+                            <div className={`mt-1 bg-white p-2 rounded-xl border-2 shadow-sm transition-colors ${typeStyles.border} ${typeStyles.text}`}>
+                              {typeStyles.icon}
+                            </div>
+                            <div className="flex-1 min-w-0 pt-1">
+                              <div className="flex justify-between items-start">
+                                <h4 className={`text-base font-bold leading-tight transition-colors ${isHovered || isSelected ? 'text-blue-800' : 'text-slate-700'}`}>
+                                  {activity.description}
+                                </h4>
+                              </div>
+                              <div className="flex items-center gap-3 mt-2">
+                                <div className="flex items-center text-xs font-bold text-slate-400 truncate">
+                                  <MapPin className="w-3.5 h-3.5 mr-1" />
+                                  <span className="truncate max-w-[140px]">{activity.location.name}</span>
+                                </div>
+                              </div>
+
+                              {/* Extended Info: Booking, Notes, Cost */}
+                              {activity.details && (
+                                <div className="flex flex-wrap items-center gap-2 mt-2">
+                                  {/* Booking confirmation */}
+                                  {activity.details.booking?.confirmationNumber && (
+                                    <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
+                                      Confirmed
+                                    </span>
+                                  )}
+                                  {/* Cost */}
+                                  {activity.details.estimatedCost && (
+                                    <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
+                                      {activity.details.estimatedCost.currency} {activity.details.estimatedCost.amount}
+                                    </span>
+                                  )}
+                                  {/* Notes preview */}
+                                  {activity.details.notes && (
+                                    <span className="text-[10px] text-slate-400 italic truncate max-w-[150px]">
+                                      "{activity.details.notes.substring(0, 30)}..."
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Quick Actions */}
+                          <div className="absolute -top-2 -right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all scale-90 group-hover:scale-100">
+                            {/* Edit Action */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleActivityClick(activity, day.id);
+                              }}
+                              className="bg-blue-100 hover:bg-blue-500 text-blue-500 hover:text-white border-2 border-blue-200 rounded-lg p-1.5 shadow-sm transition-colors"
+                              title="View Details"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                            {/* Delete Action */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDeleteActivity(day.id, activity.id);
+                              }}
+                              className="bg-red-100 hover:bg-red-500 text-red-500 hover:text-white border-2 border-red-200 rounded-lg p-1.5 shadow-sm transition-colors"
+                              title="Remove"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      </React.Fragment>
+                    );
+                  })}
+
+                  {day.activities.length === 0 && (
+                    <div className="text-center py-6 px-4 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
+                      <p className="text-sm font-bold text-slate-400">Empty Day</p>
+                      <p className="text-xs text-slate-400 mt-1">Ask TripPilot to plan something!</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        
+        {/* Bottom spacer */}
+        <div className="h-20"></div>
+      </div>
+
+      {/* Activity Detail Modal */}
+      {detailActivity && (
+        <ActivityDetail
+          activity={detailActivity.activity}
+          onClose={() => setDetailActivity(null)}
+          onEdit={handleEditClick}
+        />
+      )}
+
+      {/* Activity Edit Modal */}
+      {editActivity && (
+        <ActivityEditModal
+          activity={editActivity.activity}
+          onClose={() => setEditActivity(null)}
+          onSave={handleSaveActivity}
+        />
+      )}
+    </div>
+  );
+};
+
+export default ItineraryView;
