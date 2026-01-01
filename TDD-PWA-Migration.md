@@ -49,12 +49,9 @@ TripPlanner/
     └── geminiService.ts    # Gemini AI integration
 ```
 
-### 2.3 Critical Security Issue
-**MapView.tsx:7** contains a hardcoded Google Maps API key:
-```typescript
-const HARDCODED_KEY = "AIzaSyCg3dPug_-iXinuf4Mfmd7EVuzHw_cOtVY";
-```
-**This must be removed immediately and replaced with environment variables.**
+### 2.3 Critical Security Issue (RESOLVED)
+**MapView.tsx:7** previously contained a hardcoded Google Maps API key.
+This has been moved to environment variables (`VITE_GOOGLE_MAPS_API_KEY`).
 
 ---
 

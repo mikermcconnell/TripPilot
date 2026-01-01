@@ -93,6 +93,9 @@ export interface Activity {
 // Travel mode between days
 export type InterDayTravelMode = 'car' | 'train' | 'flight' | 'bus' | 'ferry' | 'walking' | 'other';
 
+// Time of day period for travel
+export type TravelPeriod = 'morning' | 'afternoon' | 'evening' | 'night';
+
 // Travel information from previous day to this day
 export interface InterDayTravel {
   mode: InterDayTravelMode;
@@ -100,6 +103,7 @@ export interface InterDayTravel {
   departureTime?: string;  // HH:MM
   arrivalTime?: string;    // HH:MM
   duration?: number;       // minutes
+  departurePeriod?: TravelPeriod;  // Optional: morning, afternoon, evening, night
 }
 
 // Single day's itinerary

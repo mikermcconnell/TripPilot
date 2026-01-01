@@ -4,11 +4,18 @@ import type {
   CachedDirections,
   TravelMode,
   GeoCoordinates,
+  GoogleMapsAPI,
+  GoogleDirectionsResponse,
+  GoogleRoute,
+  GoogleRouteLeg,
+  GoogleRouteStep,
+  GoogleTransitDetailsRaw,
+  TransitDetails,
 } from '@/types/maps';
 import { mapsCacheRepository } from '@/services/db/mapsCacheRepository';
 import { generateDirectionsCacheKey } from '@/utils/geo';
 
-declare const google: any;
+declare const google: GoogleMapsAPI;
 
 /**
  * Directions Service with caching and departure time support
@@ -71,16 +78,18 @@ export const directionsService = {
    * Fetch directions from Google Directions API
    */
   async fetchDirections(request: DirectionsRequest): Promise<DirectionsResult> {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve, _reject) => {
       const service = new google.maps.DirectionsService();
 
-      const apiRequest: any = {
+      const apiRequest = {
         origin: { lat: request.origin.lat, lng: request.origin.lng },
         destination: { lat: request.destination.lat, lng: request.destination.lng },
         travelMode: this.mapTravelMode(request.travelMode),
         avoidHighways: request.avoidHighways || false,
         avoidTolls: request.avoidTolls || false,
         avoidFerries: request.avoidFerries || false,
+        drivingOptions: undefined as { departureTime: Date; trafficModel: string } | undefined,
+        transitOptions: undefined as { departureTime: Date; routingPreference: string } | undefined,
       };
 
       // Add departure time options
@@ -98,18 +107,18 @@ export const directionsService = {
         }
       }
 
-      service.route(apiRequest, (response: any, status: string) => {
-        if (status !== 'OK') {
+      service.route(apiRequest, (response: GoogleDirectionsResponse | null, status: string) => {
+        if (status !== 'OK' || !response) {
           resolve({
             routes: [],
-            status: status as any,
+            status: status as DirectionsResult['status'],
           });
           return;
         }
 
-        const routes = response.routes.map((route: any) => ({
+        const routes = response.routes.map((route: GoogleRoute) => ({
           summary: route.summary || '',
-          legs: route.legs.map((leg: any) => ({
+          legs: route.legs.map((leg: GoogleRouteLeg) => ({
             startAddress: leg.start_address,
             endAddress: leg.end_address,
             startLocation: {
@@ -123,7 +132,7 @@ export const directionsService = {
             distance: leg.distance.value,
             duration: leg.duration.value,
             durationInTraffic: leg.duration_in_traffic?.value,
-            steps: leg.steps.map((step: any) => ({
+            steps: leg.steps.map((step: GoogleRouteStep) => ({
               instruction: step.instructions,
               distance: step.distance.value,
               duration: step.duration.value,
@@ -132,10 +141,10 @@ export const directionsService = {
               transitDetails: step.transit ? this.mapTransitDetails(step.transit) : undefined,
             })),
           })),
-          totalDistance: route.legs.reduce((sum: number, leg: any) => sum + leg.distance.value, 0),
-          totalDuration: route.legs.reduce((sum: number, leg: any) => sum + leg.duration.value, 0),
+          totalDistance: route.legs.reduce((sum: number, leg: GoogleRouteLeg) => sum + leg.distance.value, 0),
+          totalDuration: route.legs.reduce((sum: number, leg: GoogleRouteLeg) => sum + leg.duration.value, 0),
           totalDurationInTraffic: route.legs.reduce(
-            (sum: number, leg: any) => sum + (leg.duration_in_traffic?.value || leg.duration.value),
+            (sum: number, leg: GoogleRouteLeg) => sum + (leg.duration_in_traffic?.value || leg.duration.value),
             0
           ),
           polyline: route.overview_polyline.points || '',
@@ -174,8 +183,8 @@ export const directionsService = {
   /**
    * Map our TravelMode to Google's
    */
-  mapTravelMode(mode: TravelMode): any {
-    const mapping: Record<TravelMode, any> = {
+  mapTravelMode(mode: TravelMode): string {
+    const mapping: Record<TravelMode, string> = {
       walking: google.maps.TravelMode.WALKING,
       transit: google.maps.TravelMode.TRANSIT,
       driving: google.maps.TravelMode.DRIVING,
@@ -200,7 +209,7 @@ export const directionsService = {
   /**
    * Map transit details from Google response
    */
-  mapTransitDetails(transit: any): any {
+  mapTransitDetails(transit: GoogleTransitDetailsRaw): TransitDetails {
     return {
       line: {
         name: transit.line.name,

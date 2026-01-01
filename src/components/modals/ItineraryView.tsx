@@ -325,7 +325,7 @@ function TimePeriodSection({
         <div className="space-y-2">
           {activities.map(activity => (
             <DraggableActivityCard
-              key={activity.id}
+              key={`${dayId}-${period}-${activity.id}`}
               activity={activity}
               dayId={dayId}
               period={period}

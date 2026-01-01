@@ -1,8 +1,8 @@
-import React from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Pencil, Trash2, MapPin, Clock } from 'lucide-react';
 import type { DraggableActivityCardProps } from '@/types/planner';
+import type { Activity } from '@/types/itinerary';
 
 const ACTIVITY_TYPE_COLORS = {
   food: 'bg-activity-food border-activity-food',
@@ -11,13 +11,20 @@ const ACTIVITY_TYPE_COLORS = {
   travel: 'bg-activity-travel border-activity-travel',
 };
 
+interface ExtendedDraggableActivityCardProps extends DraggableActivityCardProps {
+  onEdit?: (activity: Activity) => void;
+  onDelete?: (dayId: string, activityId: string) => void;
+}
+
 export function DraggableActivityCard({
   activity,
   dayId,
-  index,
-  isDragging,
+  index: _index,
+  isDragging: _isDragging,
   isEditing,
-}: DraggableActivityCardProps) {
+  onEdit,
+  onDelete,
+}: ExtendedDraggableActivityCardProps) {
   const {
     attributes,
     listeners,
@@ -97,9 +104,9 @@ export function DraggableActivityCard({
         {/* Action Buttons */}
         <div className="flex-shrink-0 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
-            onClick={() => {
-              // TODO: Open edit modal
-              console.log('Edit activity', activity.id);
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit?.(activity);
             }}
             className="p-2 text-gray-400 hover:text-blue-600 rounded transition-colors"
             style={{ minHeight: '44px', minWidth: '44px' }}
@@ -108,9 +115,9 @@ export function DraggableActivityCard({
             <Pencil size={16} />
           </button>
           <button
-            onClick={() => {
-              // TODO: Confirm delete
-              console.log('Delete activity', activity.id);
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete?.(dayId, activity.id);
             }}
             className="p-2 text-gray-400 hover:text-red-600 rounded transition-colors"
             style={{ minHeight: '44px', minWidth: '44px' }}

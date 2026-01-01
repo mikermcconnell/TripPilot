@@ -2,7 +2,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { Itinerary, ITINERARY_TOOLS } from "@/types";
 import { ChatMode } from "@/hooks/useChat";
 
-const API_KEY = process.env.VITE_GEMINI_API_KEY;
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
 // Initialize Gemini Client
 const ai = new GoogleGenAI({ apiKey: API_KEY });

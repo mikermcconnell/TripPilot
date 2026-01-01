@@ -1,8 +1,6 @@
 import { Menu, Plane, Upload } from 'lucide-react';
 import { useIsMobile } from '@/hooks/useMediaQuery';
-import { ViewSwitcher } from '@/components/layout/ViewSwitcher';
 import { Breadcrumbs } from '@/components/common/Breadcrumbs';
-import { SaveIndicator } from '@/components/common/SaveIndicator';
 import { LoginButton } from '@/components/auth/LoginButton';
 import { UserMenu } from '@/components/auth/UserMenu';
 import { useAuthStore } from '@/stores/authStore';
@@ -42,7 +40,6 @@ export function Header({ variant, onMenuClick, onImportClick }: HeaderProps) {
 
         {/* Right side actions */}
         <div className="ml-auto flex items-center gap-2">
-          <SaveIndicator />
           {onImportClick && (
             <button
               onClick={onImportClick}
@@ -76,12 +73,8 @@ export function Header({ variant, onMenuClick, onImportClick }: HeaderProps) {
         </div>
       </div>
 
-      {/* View Switcher */}
-      <ViewSwitcher />
-
       {/* Right side actions */}
       <div className="flex items-center gap-3">
-        <SaveIndicator />
         {onImportClick && (
           <button
             onClick={onImportClick}

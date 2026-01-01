@@ -6,7 +6,8 @@ import { getDistanceKm, getRecommendedMode, getDepartureTime } from '@/utils/geo
 import { LiveLocationMarker } from '@/components/maps/LiveLocationMarker'; 
 
 // Declare google variable to resolve TypeScript errors
-declare var google: any;
+import type { GoogleMapsAPI } from '@/types/maps';
+declare const google: GoogleMapsAPI;
 
 declare global {
   interface Window {
@@ -57,10 +58,12 @@ const MapUpdater = ({
     if (forceOverview && allCoordsList.length > 0) {
       const bounds = new google.maps.LatLngBounds();
       allCoordsList.forEach(c => bounds.extend(c));
-      map.fitBounds(bounds, 80);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      map.fitBounds(bounds as any, 80);
 
       const listener = google.maps.event.addListenerOnce(map, "idle", () => {
-        if (map.getZoom()! > 14) map.setZoom(14);
+        const zoom = map.getZoom();
+        if (zoom != null && zoom > 14) map.setZoom(14);
       });
       return () => google.maps.event.removeListener(listener);
     }
@@ -69,28 +72,33 @@ const MapUpdater = ({
       const bounds = new google.maps.LatLngBounds();
       bounds.extend(hoveredLegCoords.start);
       bounds.extend(hoveredLegCoords.end);
-      map.fitBounds(bounds, 100);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      map.fitBounds(bounds as any, 100);
 
       const listener = google.maps.event.addListenerOnce(map, "idle", () => {
         // Cap zoom to reasonable levels
-        if (map.getZoom()! > 16) map.setZoom(16);
-        if (map.getZoom()! < 12) map.setZoom(12);
+        const zoom = map.getZoom();
+        if (zoom != null && zoom > 16) map.setZoom(16);
+        else if (zoom != null && zoom < 12) map.setZoom(12);
       });
       return () => google.maps.event.removeListener(listener);
     }
     // Priority 2: If a specific location is selected
     else if (selectedLocation) {
       map.panTo(selectedLocation);
-      if (map.getZoom()! < 14) map.setZoom(14);
+      const zoom = map.getZoom();
+      if (zoom != null && zoom < 14) map.setZoom(14);
     }
     // Priority 3: Fit all coordinates for current view
     else if (coordsList.length > 0) {
       const bounds = new google.maps.LatLngBounds();
       coordsList.forEach(c => bounds.extend(c));
-      map.fitBounds(bounds, 50);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      map.fitBounds(bounds as any, 50);
 
       const listener = google.maps.event.addListenerOnce(map, "idle", () => {
-        if (map.getZoom()! > 16) map.setZoom(16);
+        const zoom = map.getZoom();
+        if (zoom != null && zoom > 16) map.setZoom(16);
       });
       return () => google.maps.event.removeListener(listener);
     }
@@ -424,10 +432,10 @@ const MapView: React.FC<MapViewProps> = ({
   hoveredLeg,
   onMarkerHover,
   onMarkerClick,
-  enableClustering = false,
+  enableClustering: _enableClustering = false,
   showLiveLocation = false,
 }) => {
-  const GOOGLE_MAPS_API_KEY = process.env.VITE_GOOGLE_MAPS_API_KEY || "";
+  const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
   const [mapError, setMapError] = useState<string | null>(null);
   const [isOverviewMode, setIsOverviewMode] = useState(false);
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
@@ -456,7 +464,7 @@ const MapView: React.FC<MapViewProps> = ({
 
   // Find the day containing the hovered leg (for travel mode)
   const hoveredLegDayId = useMemo(() => {
-    if (!hoveredLeg || viewMode !== 'travel') return null;
+    if (!hoveredLeg || viewMode !== 'travel' || !itinerary?.days) return null;
 
     for (const day of itinerary.days) {
       const hasStart = day.activities.some(a => a.id === hoveredLeg.startId);
@@ -468,6 +476,27 @@ const MapView: React.FC<MapViewProps> = ({
     return null;
   }, [hoveredLeg, itinerary, viewMode]);
 
+  // Helper to get day location (primaryLocation or first activity with coordinates)
+  const getDayLocation = (day: typeof itinerary.days[0]) => {
+    // First try primaryLocation
+    if (day.primaryLocation?.coordinates &&
+        (day.primaryLocation.coordinates.lat !== 0 || day.primaryLocation.coordinates.lng !== 0)) {
+      return day.primaryLocation;
+    }
+    // Fallback to first activity with valid coordinates
+    const firstActivityWithCoords = day.activities?.find(
+      act => act.location?.coordinates &&
+             (act.location.coordinates.lat !== 0 || act.location.coordinates.lng !== 0)
+    );
+    if (firstActivityWithCoords) {
+      return {
+        name: day.primaryLocation?.name || firstActivityWithCoords.location.name,
+        coordinates: firstActivityWithCoords.location.coordinates
+      };
+    }
+    return null;
+  };
+
   // Get day-level primary locations (cities)
   const displayedDayLocations = useMemo(() => {
     let dayLocations: { dayId: string, dayNumber: number, location: any }[] = [];
@@ -477,12 +506,12 @@ const MapView: React.FC<MapViewProps> = ({
     // Show all day locations in overview mode or when overview button is clicked
     if (viewMode === 'overview' || isOverviewMode) {
       itinerary.days.forEach(day => {
-        if (day.primaryLocation?.coordinates &&
-            (day.primaryLocation.coordinates.lat !== 0 || day.primaryLocation.coordinates.lng !== 0)) {
+        const location = getDayLocation(day);
+        if (location) {
           dayLocations.push({
             dayId: day.id,
             dayNumber: day.dayNumber,
-            location: day.primaryLocation
+            location
           });
         }
       });
@@ -490,13 +519,15 @@ const MapView: React.FC<MapViewProps> = ({
       // Day/travel mode: show only active day's location
       const targetDayId = (viewMode === 'travel' && hoveredLegDayId) ? hoveredLegDayId : activeDayId;
       const day = itinerary.days.find(d => d.id === targetDayId);
-      if (day?.primaryLocation?.coordinates &&
-          (day.primaryLocation.coordinates.lat !== 0 || day.primaryLocation.coordinates.lng !== 0)) {
-        dayLocations.push({
-          dayId: day.id,
-          dayNumber: day.dayNumber,
-          location: day.primaryLocation
-        });
+      if (day) {
+        const location = getDayLocation(day);
+        if (location) {
+          dayLocations.push({
+            dayId: day.id,
+            dayNumber: day.dayNumber,
+            location
+          });
+        }
       }
     }
     return dayLocations;
@@ -513,7 +544,8 @@ const MapView: React.FC<MapViewProps> = ({
       if (!groups.has(key)) {
         groups.set(key, []);
       }
-      groups.get(key)!.push(dayLoc);
+      const group = groups.get(key);
+      if (group) group.push(dayLoc);
     });
 
     // Convert to array with group info
@@ -567,7 +599,9 @@ const MapView: React.FC<MapViewProps> = ({
 
     // Add activity coordinates
     displayedActivities.forEach(item => {
-      coords.push(item.activity.location.coordinates!);
+      if (item.activity.location.coordinates) {
+        coords.push(item.activity.location.coordinates);
+      }
     });
 
     return coords;
@@ -580,15 +614,15 @@ const MapView: React.FC<MapViewProps> = ({
     if (!itinerary?.days) return coords;
 
     itinerary.days.forEach(day => {
-      // Add primary location
-      if (day.primaryLocation?.coordinates &&
-          (day.primaryLocation.coordinates.lat !== 0 || day.primaryLocation.coordinates.lng !== 0)) {
-        coords.push(day.primaryLocation.coordinates);
+      // Add day location (primaryLocation or fallback to first activity)
+      const dayLocation = getDayLocation(day);
+      if (dayLocation?.coordinates) {
+        coords.push(dayLocation.coordinates);
       }
 
       // Add all activity coordinates
-      day.activities.forEach(act => {
-        if (act.location.coordinates &&
+      day.activities?.forEach(act => {
+        if (act.location?.coordinates &&
             (act.location.coordinates.lat !== 0 || act.location.coordinates.lng !== 0)) {
           coords.push(act.location.coordinates);
         }
@@ -620,25 +654,29 @@ const MapView: React.FC<MapViewProps> = ({
       const prevDay = itinerary.days[i - 1];
       const currDay = itinerary.days[i];
 
-      // Both days need primary locations with coordinates
-      if (!prevDay.primaryLocation?.coordinates || !currDay.primaryLocation?.coordinates) continue;
+      // Get locations (with fallback to first activity)
+      const prevLocation = getDayLocation(prevDay);
+      const currLocation = getDayLocation(currDay);
+
+      // Both days need locations with coordinates
+      if (!prevLocation?.coordinates || !currLocation?.coordinates) continue;
 
       // Skip if same location (use same rounding as grouped markers)
-      const prevKey = `${prevDay.primaryLocation.coordinates.lat.toFixed(4)},${prevDay.primaryLocation.coordinates.lng.toFixed(4)}`;
-      const currKey = `${currDay.primaryLocation.coordinates.lat.toFixed(4)},${currDay.primaryLocation.coordinates.lng.toFixed(4)}`;
+      const prevKey = `${prevLocation.coordinates.lat.toFixed(4)},${prevLocation.coordinates.lng.toFixed(4)}`;
+      const currKey = `${currLocation.coordinates.lat.toFixed(4)},${currLocation.coordinates.lng.toFixed(4)}`;
       if (prevKey === currKey) continue;
 
       segments.push({
         id: `travel-${prevDay.id}-${currDay.id}`,
-        from: prevDay.primaryLocation.coordinates,
-        to: currDay.primaryLocation.coordinates,
+        from: prevLocation.coordinates,
+        to: currLocation.coordinates,
         fromDayNumber: prevDay.dayNumber,
         toDayNumber: currDay.dayNumber,
         mode: currDay.travelFromPrevious?.mode,
         duration: currDay.travelFromPrevious?.duration,
         midpoint: {
-          lat: (prevDay.primaryLocation.coordinates.lat + currDay.primaryLocation.coordinates.lat) / 2,
-          lng: (prevDay.primaryLocation.coordinates.lng + currDay.primaryLocation.coordinates.lng) / 2,
+          lat: (prevLocation.coordinates.lat + currLocation.coordinates.lat) / 2,
+          lng: (prevLocation.coordinates.lng + currLocation.coordinates.lng) / 2,
         },
       });
     }
@@ -649,7 +687,7 @@ const MapView: React.FC<MapViewProps> = ({
   const selectedLocation = useMemo(() => {
     if (!selectedActivityId) return null;
     const item = displayedActivities.find(a => a.activity.id === selectedActivityId);
-    return item ? item.activity.location.coordinates! : null;
+    return item?.activity.location.coordinates ?? null;
   }, [selectedActivityId, displayedActivities]);
 
   // Get Active Leg Data for Directions API
@@ -714,6 +752,8 @@ const MapView: React.FC<MapViewProps> = ({
             mapId="trip_pilot_map"
             gestureHandling={'greedy'}
             disableDefaultUI={false}
+            zoomControl={false}
+            fullscreenControl={false}
             className="w-full h-full"
           >
              {/* Map position and zoom controller */}
@@ -963,7 +1003,7 @@ const MapView: React.FC<MapViewProps> = ({
             </button>
 
             {/* Focus on active day button - shows current day number */}
-            {activeDayId && !isOverviewMode && (
+            {activeDayId && !isOverviewMode && itinerary?.days && (
               <button
                 onClick={() => setIsOverviewMode(false)}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl shadow-lg border-2 bg-blue-500 border-blue-600 text-white font-bold text-sm cursor-default"
@@ -1003,7 +1043,9 @@ const MapView: React.FC<MapViewProps> = ({
       </div>
       
       {displayedActivities.map(({ activity }) => {
-        const pos = getRelativePosition(activity.location.coordinates!.lat, activity.location.coordinates!.lng);
+        const coords = activity.location.coordinates;
+        if (!coords) return null;
+        const pos = getRelativePosition(coords.lat, coords.lng);
         const isActive = hoveredActivityId === activity.id || selectedActivityId === activity.id;
 
         return (

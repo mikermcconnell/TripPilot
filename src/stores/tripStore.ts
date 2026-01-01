@@ -11,9 +11,10 @@ import type {
   DayItinerary,
   LocationData,
   InterDayTravel,
+  NewDayWithoutIds,
 } from '@/types';
-import { tripRepository } from '@/services/db/tripRepository';
-import { syncQueue } from '@/services/db/syncQueue';
+import { tripFirestoreService } from '@/services/firebase/tripFirestoreService';
+import { auth } from '@/config/firebase';
 import { placesService } from '@/services/maps/placesService';
 import {
   reorderActivities,
@@ -48,7 +49,7 @@ interface TripState {
   updateActivity: (dayId: string, activityId: string, updates: Partial<Activity>) => Promise<void>;
   deleteActivity: (dayId: string, activityId: string) => Promise<void>;
   replaceItinerary: (itinerary: Itinerary) => Promise<void>;
-  addDays: (days: Omit<DayItinerary, 'id'>[], position?: string) => Promise<void>;
+  addDays: (days: NewDayWithoutIds[], position?: string) => Promise<void>;
   modifyDay: (
     dayNumber: number,
     action: 'add_activities' | 'remove_activities' | 'replace_activities',
@@ -110,11 +111,17 @@ export const useTripStore = create<TripState>()(
       isLoading: false,
       error: null,
 
-      // Load all trips from IndexedDB
+      // Load all trips from Firebase
       loadTrips: async () => {
         set({ isLoading: true, error: null });
         try {
-          const trips = await tripRepository.getAll();
+          const userId = auth.currentUser?.uid;
+          if (!userId) {
+            set({ trips: [], activeTrip: null, activeTripId: null, isLoading: false });
+            return;
+          }
+
+          const trips = await tripFirestoreService.getAll(userId);
           const activeTripId = get().activeTripId;
 
           // Find active trip if we have an ID
@@ -125,8 +132,11 @@ export const useTripStore = create<TripState>()(
 
           // If no active trip, use the most recent one
           if (!activeTrip && trips.length > 0) {
-            const recent = await tripRepository.getRecent(1);
-            activeTrip = recent[0] || trips[0];
+            // Sort by updatedAt descending and take first
+            const sorted = [...trips].sort((a, b) =>
+              new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+            );
+            activeTrip = sorted[0];
           }
 
           set({
@@ -147,8 +157,6 @@ export const useTripStore = create<TripState>()(
       setActiveTrip: async (tripId: TripId) => {
         const trip = get().trips.find(t => t.id === tripId);
         if (trip) {
-          // Update last accessed timestamp
-          await tripRepository.touch(tripId);
           set({ activeTrip: trip, activeTripId: tripId });
         }
       },
@@ -204,11 +212,10 @@ export const useTripStore = create<TripState>()(
           defaultCurrency: input.defaultCurrency || 'USD',
         };
 
-        // Save to IndexedDB
-        await tripRepository.create(trip);
-
-        // Queue sync action
-        await syncQueue.enqueue('create_trip', { trip });
+        // Save to Firebase
+        const userId = auth.currentUser?.uid;
+        if (!userId) throw new Error('Must be authenticated to create trips');
+        await tripFirestoreService.create(trip, userId);
 
         // Update state
         set(state => ({
@@ -222,8 +229,9 @@ export const useTripStore = create<TripState>()(
 
       // Update trip
       updateTrip: async (tripId: TripId, updates: Partial<Trip>) => {
-        await tripRepository.update(tripId, updates);
-        await syncQueue.enqueue('update_trip', { tripId, updates });
+        const userId = auth.currentUser?.uid;
+        if (!userId) throw new Error('Must be authenticated to update trips');
+        await tripFirestoreService.update(tripId, updates, userId);
 
         set(state => ({
           trips: state.trips.map(t => (t.id === tripId ? { ...t, ...updates } : t)),
@@ -236,8 +244,9 @@ export const useTripStore = create<TripState>()(
 
       // Delete trip
       deleteTrip: async (tripId: TripId) => {
-        await tripRepository.delete(tripId);
-        await syncQueue.enqueue('delete_trip', { tripId });
+        const userId = auth.currentUser?.uid;
+        if (!userId) throw new Error('Must be authenticated to delete trips');
+        await tripFirestoreService.delete(tripId, userId);
 
         set(state => {
           const newTrips = state.trips.filter(t => t.id !== tripId);
@@ -297,11 +306,10 @@ export const useTripStore = create<TripState>()(
           },
         };
 
-        // Save to IndexedDB
-        await tripRepository.create(newTrip);
-
-        // Queue sync action
-        await syncQueue.enqueue('create_trip', { trip: newTrip });
+        // Save to Firebase
+        const userId = auth.currentUser?.uid;
+        if (!userId) throw new Error('Must be authenticated to duplicate trips');
+        await tripFirestoreService.create(newTrip, userId);
 
         // Update state
         set(state => ({
@@ -337,11 +345,6 @@ export const useTripStore = create<TripState>()(
         };
 
         await get().updateTrip(activeTrip.id, { itinerary: updatedItinerary });
-        await syncQueue.enqueue('add_activity', {
-          tripId: activeTrip.id,
-          dayNumber,
-          activity: newActivity,
-        });
       },
 
       // Update activity
@@ -367,12 +370,6 @@ export const useTripStore = create<TripState>()(
         };
 
         await get().updateTrip(activeTrip.id, { itinerary: updatedItinerary });
-        await syncQueue.enqueue('update_activity', {
-          tripId: activeTrip.id,
-          dayId,
-          activityId,
-          updates,
-        });
       },
 
       // Delete activity
@@ -396,11 +393,6 @@ export const useTripStore = create<TripState>()(
         };
 
         await get().updateTrip(activeTrip.id, { itinerary: updatedItinerary });
-        await syncQueue.enqueue('delete_activity', {
-          tripId: activeTrip.id,
-          dayId,
-          activityId,
-        });
       },
 
       // Replace entire itinerary
@@ -412,7 +404,7 @@ export const useTripStore = create<TripState>()(
       },
 
       // Add days to itinerary
-      addDays: async (days: Omit<DayItinerary, 'id'>[], position: string = 'end') => {
+      addDays: async (days: NewDayWithoutIds[], position: string = 'end') => {
         const { activeTrip } = get();
         if (!activeTrip) return;
 
@@ -470,12 +462,6 @@ export const useTripStore = create<TripState>()(
           itinerary: updatedItinerary,
           endDate: newEndDate,
         });
-
-        await syncQueue.enqueue('add_days', {
-          tripId: activeTrip.id,
-          days: newDays,
-          position,
-        });
       },
 
       // Modify a specific day's activities
@@ -532,31 +518,28 @@ export const useTripStore = create<TripState>()(
         };
 
         await get().updateTrip(activeTrip.id, { itinerary: updatedItinerary });
-        await syncQueue.enqueue('modify_day', {
-          tripId: activeTrip.id,
-          dayNumber,
-          action,
-          activities: updatedActivities,
-        });
       },
 
       // Get trip summaries for list view
       getTripSummaries: () => {
         const { trips } = get();
-        return trips.map(trip => ({
-          id: trip.id,
-          title: trip.title,
-          destination: trip.destination.name,
-          coverImageUrl: trip.coverImageUrl,
-          startDate: trip.startDate,
-          endDate: trip.endDate,
-          status: trip.status,
-          daysCount: trip.itinerary.days.length,
-          activitiesCount: trip.itinerary.days.reduce(
-            (sum, day) => sum + day.activities.length,
-            0
-          ),
-        }));
+        return trips.map(trip => {
+          const days = trip.itinerary?.days || [];
+          return {
+            id: trip.id,
+            title: trip.title,
+            destination: trip.destination?.name || 'Unknown',
+            coverImageUrl: trip.coverImageUrl,
+            startDate: trip.startDate,
+            endDate: trip.endDate,
+            status: trip.status,
+            daysCount: days.length,
+            activitiesCount: days.reduce(
+              (sum, day) => sum + (day.activities?.length || 0),
+              0
+            ),
+          };
+        });
       },
 
       // Get active trip days
@@ -600,11 +583,6 @@ export const useTripStore = create<TripState>()(
         };
 
         await get().updateTrip(activeTrip.id, updatedTrip);
-        await syncQueue.enqueue('reorder_activities', {
-          tripId: activeTrip.id,
-          dayId,
-          activityIds: newActivities.map(a => a.id),
-        });
       },
 
       // Move activity between days
@@ -651,13 +629,6 @@ export const useTripStore = create<TripState>()(
         };
 
         await get().updateTrip(activeTrip.id, updatedTrip);
-        await syncQueue.enqueue('move_activity', {
-          tripId: activeTrip.id,
-          activityId,
-          sourceDayId,
-          destinationDayId,
-          destinationIndex,
-        });
       },
 
       // Reorder days in itinerary
@@ -687,10 +658,6 @@ export const useTripStore = create<TripState>()(
         };
 
         await get().updateTrip(activeTrip.id, updatedTrip);
-        await syncQueue.enqueue('reorder_days', {
-          tripId: activeTrip.id,
-          dayIds: newDays.map(d => d.id),
-        });
       },
 
       // Add day at position
@@ -718,11 +685,6 @@ export const useTripStore = create<TripState>()(
         };
 
         await get().updateTrip(activeTrip.id, updatedTrip);
-        await syncQueue.enqueue('add_day', {
-          tripId: activeTrip.id,
-          day: newDay,
-          position,
-        });
 
         return newDay;
       },
@@ -795,11 +757,6 @@ export const useTripStore = create<TripState>()(
         };
 
         await get().updateTrip(activeTrip.id, updatedTrip);
-        await syncQueue.enqueue('add_day', {
-          tripId: activeTrip.id,
-          day: newDays[dayIndex],
-          position,
-        });
 
         return newDays[dayIndex];
       },
@@ -836,11 +793,6 @@ export const useTripStore = create<TripState>()(
         };
 
         await get().updateTrip(activeTrip.id, updatedTrip);
-        await syncQueue.enqueue('remove_day', {
-          tripId: activeTrip.id,
-          dayId,
-          deleteActivities: activityHandling === 'delete',
-        });
 
         // Log orphaned activities if any (for debugging)
         if (orphanedActivities.length > 0) {
@@ -873,11 +825,6 @@ export const useTripStore = create<TripState>()(
         };
 
         await get().updateTrip(activeTrip.id, updatedTrip);
-        await syncQueue.enqueue('modify_day', {
-          tripId: activeTrip.id,
-          dayId,
-          updates: { primaryLocation: location },
-        });
       },
 
       // Update travel mode for a day (how to get there from previous day)
@@ -905,11 +852,6 @@ export const useTripStore = create<TripState>()(
         };
 
         await get().updateTrip(activeTrip.id, updatedTrip);
-        await syncQueue.enqueue('modify_day', {
-          tripId: activeTrip.id,
-          dayId,
-          updates: { travelFromPrevious: travel },
-        });
       },
 
       // Replace itinerary days (for undo/redo)

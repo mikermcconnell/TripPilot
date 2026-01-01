@@ -1,7 +1,17 @@
 import { useState, useMemo, useEffect } from 'react';
-import { ChatMessage, PendingAction, Itinerary, Activity, ActivityType, GeminiHistoryEntry, CreateTripInput, DayItinerary } from '@/types';
+import { ChatMessage, PendingAction, Itinerary, Activity, ActivityType, GeminiHistoryEntry, CreateTripInput, NewDayWithoutIds } from '@/types';
 import { getChatResponse } from '@/services/geminiService';
 import { format, addDays, parseISO, startOfDay, isBefore } from 'date-fns';
+import type {
+  ProposeActivityArgs,
+  CreateItineraryArgs,
+  CreateItineraryDayArg,
+  GeminiFunctionActivityArg,
+  AddDayArgs,
+  AddDayDayArg,
+  ModifyDayArgs,
+  AskClarificationArgs,
+} from '@/types/tools';
 
 // Chat mode: 'create' for new trips, 'edit' for modifying existing trips
 export type ChatMode = 'create' | 'edit';
@@ -41,7 +51,7 @@ function extractDestination(itinerary: Itinerary): string {
  * Validates and fixes dates, extracts destination
  */
 function inferTripInputFromItinerary(
-  callArgs: any,
+  callArgs: CreateItineraryArgs,
   itinerary: Itinerary
 ): CreateTripInput {
   const title = callArgs.title || itinerary.title;
@@ -74,7 +84,7 @@ function inferTripInputFromItinerary(
 }
 
 // Callback type for adding days
-type OnDayAddCallback = (days: Omit<DayItinerary, 'id'>[], position?: string) => Promise<void>;
+type OnDayAddCallback = (days: NewDayWithoutIds[], position?: string) => Promise<void>;
 // Callback type for modifying days
 type OnDayModifyCallback = (
   dayNumber: number,
@@ -144,7 +154,7 @@ export function useChat(
         const call = functionCalls[0];
 
         if (call.name === 'propose_activity') {
-          const args = call.args as any;
+          const args = call.args as unknown as ProposeActivityArgs;
 
           if (!hasActiveTrip) {
             // Cannot add activity without a trip
@@ -179,11 +189,11 @@ export function useChat(
             };
           }
         } else if (call.name === 'create_itinerary') {
-          const args = call.args as any;
+          const args = call.args as unknown as CreateItineraryArgs;
 
           const newItinerary: Itinerary = {
             title: args.title,
-            days: (args.days as any[]).map((d, index) => {
+            days: args.days.map((d: CreateItineraryDayArg, index: number) => {
               const date = new Date();
               date.setDate(date.getDate() + 1 + index);
 
@@ -191,7 +201,7 @@ export function useChat(
                 id: `day-${d.dayNumber}-${Date.now()}`,
                 dayNumber: d.dayNumber,
                 date: date.toISOString().split('T')[0],
-                activities: (d.activities || []).map((a: any, aIdx: number) => ({
+                activities: (d.activities || []).map((a: GeminiFunctionActivityArg, aIdx: number) => ({
                   id: `act-${d.dayNumber}-${aIdx}-${Date.now()}`,
                   description: a.description,
                   type: a.activityType,
@@ -246,7 +256,7 @@ export function useChat(
           }
         } else if (call.name === 'add_day') {
           // Handle add_day function call
-          const args = call.args as any;
+          const args = call.args as unknown as AddDayArgs;
 
           if (!hasActiveTrip) {
             newMessage = {
@@ -255,11 +265,11 @@ export function useChat(
             };
           } else {
             // Parse the days from the AI response
-            const newDays = (args.days as any[]).map((d: any, index: number) => ({
+            const newDays = args.days.map((d: AddDayDayArg, index: number) => ({
               dayNumber: d.dayNumber || (itinerary.days.length + index + 1),
               title: d.title,
               date: '', // Will be calculated when applied
-              activities: (d.activities || []).map((a: any) => ({
+              activities: (d.activities || []).map((a: GeminiFunctionActivityArg) => ({
                 description: a.description,
                 type: a.activityType as ActivityType,
                 time: a.time,
@@ -274,7 +284,7 @@ export function useChat(
               }))
             }));
 
-            const dayTitles = newDays.map((d: any) =>
+            const dayTitles = newDays.map((d) =>
               d.title || d.activities[0]?.location?.name || `Day ${d.dayNumber}`
             ).join(', ');
 
@@ -293,7 +303,7 @@ export function useChat(
           }
         } else if (call.name === 'modify_day') {
           // Handle modify_day function call
-          const args = call.args as any;
+          const args = call.args as unknown as ModifyDayArgs;
 
           if (!hasActiveTrip) {
             newMessage = {
@@ -301,11 +311,11 @@ export function useChat(
               content: "I'd love to modify your itinerary, but you'll need to create a trip first!"
             };
           } else {
-            const dayNumber = Number(args.dayNumber);
-            const modifyAction = args.action as 'add_activities' | 'remove_activities' | 'replace_activities';
+            const dayNumber = args.dayNumber;
+            const modifyAction = args.action;
 
             // Parse activities if provided
-            const activities = (args.activities || []).map((a: any) => ({
+            const activities = (args.activities || []).map((a: GeminiFunctionActivityArg) => ({
               description: a.description,
               type: a.activityType as ActivityType,
               time: a.time,
@@ -345,7 +355,7 @@ export function useChat(
           }
         } else if (call.name === 'ask_clarification') {
           // Handle ask_clarification function call
-          const args = call.args as any;
+          const args = call.args as unknown as AskClarificationArgs;
 
           newMessage = {
             ...newMessage,

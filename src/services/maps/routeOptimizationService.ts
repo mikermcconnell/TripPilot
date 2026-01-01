@@ -1,5 +1,5 @@
 import type { Activity } from '@/types/itinerary';
-import type { TravelMode, GeoCoordinates } from '@/types/maps';
+import type { TravelMode } from '@/types/maps';
 import { getDistanceKm } from '@/utils/geo';
 import { distanceMatrixService } from './distanceMatrixService';
 
@@ -123,7 +123,7 @@ export const routeOptimizationService = {
     activities: Activity[],
     startActivity?: Activity,
     endActivity?: Activity,
-    mode: TravelMode = 'driving'
+    _mode: TravelMode = 'driving'
   ): Promise<Activity[]> {
     if (activities.length === 0) return [];
     if (activities.length === 1) return activities;
@@ -251,7 +251,7 @@ export const routeOptimizationService = {
    * Check if optimization would be beneficial
    * Returns true if route seems inefficient
    */
-  async shouldOptimize(activities: Activity[], mode: TravelMode = 'driving'): Promise<boolean> {
+  async shouldOptimize(activities: Activity[], _mode: TravelMode = 'driving'): Promise<boolean> {
     if (activities.length < 3) return false;
 
     const validActivities = activities.filter(

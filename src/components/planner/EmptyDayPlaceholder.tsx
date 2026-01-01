@@ -1,4 +1,3 @@
-import React from 'react';
 import { Plus } from 'lucide-react';
 
 interface EmptyDayPlaceholderProps {
@@ -6,7 +5,7 @@ interface EmptyDayPlaceholderProps {
   onAddActivity: () => void;
 }
 
-export function EmptyDayPlaceholder({ dayId, onAddActivity }: EmptyDayPlaceholderProps) {
+export function EmptyDayPlaceholder({ dayId: _dayId, onAddActivity }: EmptyDayPlaceholderProps) {
   return (
     <div className="flex items-center justify-center min-h-[200px] border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-400 hover:bg-blue-50/50 transition-colors">
       <button

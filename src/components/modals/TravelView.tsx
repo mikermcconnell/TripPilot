@@ -347,7 +347,7 @@ const TravelView: React.FC<TravelViewProps> = ({ days, onDaySelect, onLegHover, 
                   const isLongDistance = distance > 200;
 
                   return (
-                    <div key={activity.id} className="relative">
+                    <div key={`${day.id}-${activity.id}`} className="relative">
                       {/* Activity Dot */}
                       <div className="absolute -left-[29px] top-3 w-4 h-4 rounded-full bg-white border-4 border-blue-500 z-10"></div>
                       

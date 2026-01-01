@@ -21,6 +21,11 @@ export type PendingActionStatus = 'pending' | 'confirmed' | 'cancelled';
 // Modify day action types
 export type ModifyDayAction = 'add_activities' | 'remove_activities' | 'replace_activities';
 
+// Helper type for days with activities that don't have IDs yet
+export type NewDayWithoutIds = Omit<DayItinerary, 'id' | 'activities'> & {
+  activities: Omit<Activity, 'id'>[];
+};
+
 // Pending action data structure
 export interface PendingActionData {
   dayNumber?: number;
@@ -28,7 +33,7 @@ export interface PendingActionData {
   itinerary?: Itinerary;
   tripInput?: CreateTripInput;
   // For add_day action
-  days?: Omit<DayItinerary, 'id'>[];
+  days?: NewDayWithoutIds[];
   position?: string;
   // For modify_day action
   modifyAction?: ModifyDayAction;

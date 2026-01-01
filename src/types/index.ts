@@ -3,7 +3,6 @@ export * from './itinerary';
 export * from './chat';
 export * from './tools';
 export * from './trip';
-export * from './offline';
 export * from './budget';
 export * from './packing';
 export * from './photo';

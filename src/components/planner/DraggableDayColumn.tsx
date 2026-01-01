@@ -1,22 +1,29 @@
-import React from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Plus, Trash2, Calendar } from 'lucide-react';
 import type { DraggableDayColumnProps } from '@/types/planner';
+import type { Activity } from '@/types/itinerary';
 import { DraggableActivityCard } from './DraggableActivityCard';
 import { EmptyDayPlaceholder } from './EmptyDayPlaceholder';
 import { usePlannerStore } from '@/stores/plannerStore';
 import { useTripStore } from '@/stores/tripStore';
 
+interface ExtendedDraggableDayColumnProps extends DraggableDayColumnProps {
+  onEditActivity?: (activity: Activity) => void;
+  onDeleteActivity?: (dayId: string, activityId: string) => void;
+}
+
 export function DraggableDayColumn({
   day,
-  index,
-  isActive,
-  isDragging,
+  index: _index,
+  isActive: _isActive,
+  isDragging: _isDragging,
   isDropTarget,
-}: DraggableDayColumnProps) {
+  onEditActivity,
+  onDeleteActivity,
+}: ExtendedDraggableDayColumnProps) {
   const {
     attributes,
     listeners,
@@ -139,6 +146,8 @@ export function DraggableDayColumn({
                 index={activityIndex}
                 isDragging={false}
                 isEditing={false}
+                onEdit={onEditActivity}
+                onDelete={onDeleteActivity}
               />
             ))}
           </SortableContext>

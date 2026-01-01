@@ -1,6 +1,4 @@
 import type {
-  DistanceMatrixRequest,
-  DistanceMatrixResult,
   DayTravelMatrix,
   TravelLegData,
   TravelMode,

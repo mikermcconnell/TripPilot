@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { useRouteOptimization } from '@/hooks/useRouteOptimization';
 import type { Activity } from '@/types/itinerary';
 import type { TravelMode, OptimizationOptions } from '@/types/maps';

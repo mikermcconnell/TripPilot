@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { AdvancedMarker } from '@vis.gl/react-google-maps';
 import { useLiveTracking } from '@/hooks/useLiveTracking';
 import type { GeoCoordinates } from '@/types/maps';

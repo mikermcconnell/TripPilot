@@ -34,10 +34,28 @@ function convertTimestamps<T extends Record<string, unknown>>(data: T): T {
   return converted;
 }
 
-// Prepare trip data for Firestore (add userId, convert dates)
+// Remove undefined values recursively (Firebase doesn't accept undefined)
+function removeUndefined<T>(obj: T): T {
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) {
+    return obj.map(item => removeUndefined(item)) as T;
+  }
+  if (typeof obj === 'object') {
+    const cleaned: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      if (value !== undefined) {
+        cleaned[key] = removeUndefined(value);
+      }
+    }
+    return cleaned as T;
+  }
+  return obj;
+}
+
+// Prepare trip data for Firestore (add userId, convert dates, remove undefined)
 function prepareForFirestore(trip: Trip, userId: string) {
   return {
-    ...trip,
+    ...removeUndefined(trip),
     userId,
     updatedAt: serverTimestamp(),
   };
@@ -94,7 +112,7 @@ export const tripFirestoreService = {
     }
 
     await updateDoc(tripRef, {
-      ...updates,
+      ...removeUndefined(updates),
       updatedAt: serverTimestamp(),
     });
   },

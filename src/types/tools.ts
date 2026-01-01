@@ -1,4 +1,6 @@
 import { Type } from "@google/genai";
+import type { ActivityType } from './itinerary';
+import type { ModifyDayAction } from './chat';
 
 // Tool definitions for Gemini
 export const ITINERARY_TOOLS = [
@@ -194,3 +196,118 @@ export const ITINERARY_TOOLS = [
     ],
   },
 ];
+
+// ============================================
+// GEMINI FUNCTION CALL ARGUMENT TYPES
+// ============================================
+
+/**
+ * Activity argument structure used across multiple function calls
+ */
+export interface GeminiFunctionActivityArg {
+  description: string;
+  activityType: ActivityType;
+  time: string;
+  locationName: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+// --- PROPOSE_ACTIVITY ---
+
+/**
+ * Arguments for the propose_activity function call
+ */
+export interface ProposeActivityArgs {
+  dayNumber: number;
+  description: string;
+  locationName: string;
+  latitude?: number;
+  longitude?: number;
+  activityType: ActivityType;
+  time: string;
+}
+
+// --- CREATE_ITINERARY ---
+
+/**
+ * Day structure within create_itinerary arguments
+ */
+export interface CreateItineraryDayArg {
+  dayNumber: number;
+  activities: GeminiFunctionActivityArg[];
+}
+
+/**
+ * Arguments for the create_itinerary function call
+ */
+export interface CreateItineraryArgs {
+  title: string;
+  startDate?: string;
+  days: CreateItineraryDayArg[];
+}
+
+// --- ADD_DAY ---
+
+/**
+ * Day structure within add_day arguments
+ */
+export interface AddDayDayArg {
+  dayNumber?: number;
+  title?: string;
+  activities: GeminiFunctionActivityArg[];
+}
+
+/**
+ * Arguments for the add_day function call
+ */
+export interface AddDayArgs {
+  days: AddDayDayArg[];
+  position?: 'start' | 'end' | string;
+}
+
+// --- MODIFY_DAY ---
+
+// ModifyDayAction is imported from chat.ts to avoid duplicate exports
+
+/**
+ * Arguments for the modify_day function call
+ */
+export interface ModifyDayArgs {
+  dayNumber: number;
+  action: ModifyDayAction;
+  activities?: GeminiFunctionActivityArg[];
+  removeIndices?: number[];
+}
+
+// --- ASK_CLARIFICATION ---
+
+/**
+ * Arguments for the ask_clarification function call
+ */
+export interface AskClarificationArgs {
+  question: string;
+  options?: string[];
+}
+
+// --- UNION TYPE FOR ALL FUNCTION CALLS ---
+
+/**
+ * Discriminated union of all Gemini function call types
+ */
+export type GeminiFunctionCall =
+  | { name: 'propose_activity'; args: ProposeActivityArgs }
+  | { name: 'create_itinerary'; args: CreateItineraryArgs }
+  | { name: 'add_day'; args: AddDayArgs }
+  | { name: 'modify_day'; args: ModifyDayArgs }
+  | { name: 'ask_clarification'; args: AskClarificationArgs };
+
+/**
+ * Type guard to check if a function call is of a specific type
+ */
+export function isFunctionCall<T extends GeminiFunctionCall['name']>(
+  call: GeminiFunctionCall,
+  name: T
+): call is Extract<GeminiFunctionCall, { name: T }> {
+  return call.name === name;
+}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Car, Train, Plane, Bus, Ship, Footprints, MoreHorizontal, ChevronDown, X, Clock, Loader2, Check } from 'lucide-react';
-import type { InterDayTravel, InterDayTravelMode, GeoCoordinates } from '@/types';
+import { Car, Train, Plane, Bus, Ship, Footprints, MoreHorizontal, ChevronDown, X, Clock, Loader2, Check, Sun, Sunset, Moon, CloudMoon } from 'lucide-react';
+import type { InterDayTravel, InterDayTravelMode, TravelPeriod, GeoCoordinates } from '@/types';
 import { directionsService } from '@/services/maps/directionsService';
 import type { TravelMode } from '@/types/maps';
 
@@ -23,6 +23,13 @@ const TRAVEL_MODES: { mode: InterDayTravelMode; label: string; icon: React.React
   { mode: 'ferry', label: 'Ferry', icon: <Ship className="w-4 h-4" /> },
   { mode: 'walking', label: 'Walking', icon: <Footprints className="w-4 h-4" />, googleMode: 'walking' },
   { mode: 'other', label: 'Other', icon: <MoreHorizontal className="w-4 h-4" /> },
+];
+
+const TRAVEL_PERIODS: { period: TravelPeriod; label: string; icon: React.ReactNode; timeRange: string }[] = [
+  { period: 'morning', label: 'Morning', icon: <Sun className="w-4 h-4" />, timeRange: '6am - 12pm' },
+  { period: 'afternoon', label: 'Afternoon', icon: <Sunset className="w-4 h-4" />, timeRange: '12pm - 5pm' },
+  { period: 'evening', label: 'Evening', icon: <CloudMoon className="w-4 h-4" />, timeRange: '5pm - 9pm' },
+  { period: 'night', label: 'Night', icon: <Moon className="w-4 h-4" />, timeRange: '9pm - 6am' },
 ];
 
 // Format duration in minutes to human readable string
@@ -64,6 +71,7 @@ export const InterDayTravelEditor: React.FC<InterDayTravelEditorProps> = ({
   });
 
   const selectedMode = travel ? TRAVEL_MODES.find(m => m.mode === travel.mode) : null;
+  const selectedPeriod = travel?.departurePeriod ? TRAVEL_PERIODS.find(p => p.period === travel.departurePeriod) : null;
 
   // Calculate travel times when dropdown opens
   useEffect(() => {
@@ -132,14 +140,23 @@ export const InterDayTravelEditor: React.FC<InterDayTravelEditorProps> = ({
         setManualMinutes(mins > 0 ? mins.toString() : '');
       }
     } else {
-      // Auto modes - save immediately
+      // Auto modes - save immediately, preserve existing period
       onTravelChange({
         mode,
         details: travel?.details,
         duration: duration || undefined,
+        departurePeriod: travel?.departurePeriod,
       });
       setIsExpanded(false);
     }
+  };
+
+  const handlePeriodSelect = (period: TravelPeriod | undefined) => {
+    if (!travel) return;
+    onTravelChange({
+      ...travel,
+      departurePeriod: period,
+    });
   };
 
   const handleManualSave = () => {
@@ -153,6 +170,7 @@ export const InterDayTravelEditor: React.FC<InterDayTravelEditorProps> = ({
       mode: manualInputMode,
       details: travel?.details,
       duration: totalMinutes > 0 ? totalMinutes : undefined,
+      departurePeriod: travel?.departurePeriod,
     });
     setIsExpanded(false);
     setManualInputMode(null);
@@ -188,28 +206,37 @@ export const InterDayTravelEditor: React.FC<InterDayTravelEditorProps> = ({
             <ChevronDown className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
           </button>
         ) : (
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="group flex items-center gap-2 px-3 py-1.5 bg-blue-500 border-2 border-blue-600 rounded-full text-white hover:bg-blue-600 transition-all text-sm font-bold shadow-md"
-          >
-            {selectedMode?.icon}
-            <span>{selectedMode?.label}</span>
-            {travel.duration && (
-              <span className="flex items-center gap-1 text-blue-200 font-medium">
-                <Clock className="w-3 h-3" />
-                {formatDuration(travel.duration)}
-              </span>
-            )}
-            {travel.details && (
-              <span className="text-blue-200 font-normal">({travel.details})</span>
-            )}
+          <div className="group flex items-center gap-2 px-3 py-1.5 bg-blue-500 border-2 border-blue-600 rounded-full text-white text-sm font-bold shadow-md">
+            <button
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+            >
+              {selectedMode?.icon}
+              <span>{selectedMode?.label}</span>
+              {selectedPeriod && (
+                <span className="flex items-center gap-1 text-blue-200 font-medium">
+                  {selectedPeriod.icon}
+                  <span className="text-xs">{selectedPeriod.label}</span>
+                </span>
+              )}
+              {travel.duration && (
+                <span className="flex items-center gap-1 text-blue-200 font-medium">
+                  <Clock className="w-3 h-3" />
+                  {formatDuration(travel.duration)}
+                </span>
+              )}
+              {travel.details && (
+                <span className="text-blue-200 font-normal">({travel.details})</span>
+              )}
+            </button>
             <button
               onClick={handleClear}
               className="ml-1 p-0.5 hover:bg-blue-700 rounded-full transition-colors"
+              title="Clear travel mode"
             >
               <X className="w-3 h-3" />
             </button>
-          </button>
+          </div>
         )}
 
         {/* Dropdown for selecting travel mode */}
@@ -318,6 +345,35 @@ export const InterDayTravelEditor: React.FC<InterDayTravelEditorProps> = ({
                     </button>
                   );
                 })}
+              </div>
+            )}
+
+            {/* Departure time period selector (only show when mode is selected) */}
+            {!manualInputMode && travel && (
+              <div className="border-t border-slate-200 p-3">
+                <div className="text-xs font-bold text-slate-500 uppercase mb-2">
+                  Departure Time (Optional)
+                </div>
+                <div className="grid grid-cols-4 gap-1">
+                  {TRAVEL_PERIODS.map(({ period, label, icon }) => (
+                    <button
+                      key={period}
+                      onClick={() => handlePeriodSelect(travel.departurePeriod === period ? undefined : period)}
+                      className={`
+                        flex flex-col items-center gap-1 px-2 py-2 rounded-lg transition-colors text-xs
+                        ${travel.departurePeriod === period
+                          ? 'bg-amber-100 text-amber-700 border-2 border-amber-300'
+                          : 'text-slate-500 hover:bg-slate-100 border-2 border-transparent'
+                        }
+                      `}
+                    >
+                      <span className={travel.departurePeriod === period ? 'text-amber-600' : 'text-slate-400'}>
+                        {icon}
+                      </span>
+                      <span className="font-medium">{label}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>

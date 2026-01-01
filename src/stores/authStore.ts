@@ -1,47 +1,63 @@
 import { create } from 'zustand';
 import { User } from 'firebase/auth';
 import { authService } from '@/services/firebase/authService';
-import { syncService } from '@/services/firebase/syncService';
+import { tripFirestoreService } from '@/services/firebase/tripFirestoreService';
+import { useTripStore } from './tripStore';
 
 interface AuthState {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  isSyncing: boolean;
   error: string | null;
+  _unsubscribeTrips: (() => void) | null;
   initialize: () => () => void;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   clearError: () => void;
 }
 
-export const useAuthStore = create<AuthState>()((set) => ({
+export const useAuthStore = create<AuthState>()((set, get) => ({
   user: null,
   isLoading: true,
   isAuthenticated: false,
-  isSyncing: false,
   error: null,
+  _unsubscribeTrips: null,
 
   initialize: () => {
     return authService.onAuthStateChange(async (user) => {
+      // Cleanup previous listener if exists
+      const currentUnsubscribe = get()._unsubscribeTrips;
+      if (currentUnsubscribe) {
+        currentUnsubscribe();
+        set({ _unsubscribeTrips: null });
+      }
+
       set({
         user,
         isAuthenticated: !!user,
         isLoading: false,
       });
 
-      // Initialize or cleanup sync based on auth state
       if (user) {
-        set({ isSyncing: true });
-        try {
-          await syncService.initialize(user.uid);
-        } catch (error) {
-          console.error('Sync initialization failed:', error);
-        } finally {
-          set({ isSyncing: false });
-        }
+        // Load trips initially
+        await useTripStore.getState().loadTrips();
+
+        // Set up real-time listener for trip updates
+        const unsubscribe = tripFirestoreService.subscribeToTrips(
+          user.uid,
+          (trips) => {
+            const currentActiveTripId = useTripStore.getState().activeTripId;
+            const activeTrip = trips.find(t => t.id === currentActiveTripId) || null;
+            useTripStore.setState({ trips, activeTrip });
+          },
+          (error) => {
+            console.error('Trips subscription error:', error);
+          }
+        );
+        set({ _unsubscribeTrips: unsubscribe });
       } else {
-        syncService.cleanup();
+        // Clear trips on logout
+        useTripStore.setState({ trips: [], activeTrip: null, activeTripId: null });
       }
     });
   },
@@ -60,6 +76,12 @@ export const useAuthStore = create<AuthState>()((set) => ({
   signOut: async () => {
     set({ isLoading: true });
     try {
+      // Cleanup trips subscription before signing out
+      const currentUnsubscribe = get()._unsubscribeTrips;
+      if (currentUnsubscribe) {
+        currentUnsubscribe();
+        set({ _unsubscribeTrips: null });
+      }
       await authService.signOut();
     } catch (error) {
       set({ error: error instanceof Error ? error.message : 'Sign out failed' });

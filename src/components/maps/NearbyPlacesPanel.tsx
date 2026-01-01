@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNearbyPlaces } from '@/hooks/useNearbyPlaces';
 import type { NearbyPlace, GeoCoordinates, NearbyCategory } from '@/types/maps';
 import { NEARBY_CATEGORIES } from '@/types/maps';
+
+// Note: NearbyCategory uses 'id' property, not 'type'
 
 interface NearbyPlacesPanelProps {
   location: GeoCoordinates;
@@ -28,7 +30,7 @@ export function NearbyPlacesPanel({
   const { places, isLoading, error, search } = useNearbyPlaces({
     location,
     radius,
-    type: selectedCategory.type,
+    type: selectedCategory.id,
     openNow,
     autoFetch: true,
   });
@@ -36,7 +38,7 @@ export function NearbyPlacesPanel({
   // Handle category change
   const handleCategoryChange = (category: NearbyCategory) => {
     setSelectedCategory(category);
-    search({ type: category.type, openNow });
+    search({ type: category.id, openNow });
   };
 
   // Handle open now filter toggle
@@ -76,10 +78,10 @@ export function NearbyPlacesPanel({
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
           {NEARBY_CATEGORIES.map((category) => (
             <button
-              key={category.type}
+              key={category.id}
               onClick={() => handleCategoryChange(category)}
               className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-                selectedCategory.type === category.type
+                selectedCategory.id === category.id
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}

@@ -1,4 +1,3 @@
-import React from 'react';
 import { Plus, Undo2, Redo2, Eye } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
 

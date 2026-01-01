@@ -4,6 +4,282 @@
 
 import type { GeoCoordinates } from './itinerary';
 
+// ============================================
+// GOOGLE MAPS API INTERNAL TYPES
+// These types represent the raw Google Maps API objects
+// ============================================
+
+/** Google Maps API namespace (for declare const google) */
+export interface GoogleMapsAPI {
+  maps: {
+    DirectionsService: new () => GoogleDirectionsService;
+    Geocoder: new () => GoogleGeocoder;
+    TravelMode: {
+      WALKING: string;
+      TRANSIT: string;
+      DRIVING: string;
+      BICYCLING: string;
+    };
+    TrafficModel: {
+      BEST_GUESS: string;
+      OPTIMISTIC: string;
+      PESSIMISTIC: string;
+    };
+    TransitRoutePreference: {
+      FEWER_TRANSFERS: string;
+      LESS_WALKING: string;
+    };
+    places: {
+      AutocompleteService: new () => GoogleAutocompleteService;
+      AutocompleteSessionToken: new () => GoogleAutocompleteSessionToken;
+      PlacesService: new (container: HTMLElement) => GooglePlacesService;
+    };
+    LatLng: new (lat: number, lng: number) => GoogleLatLng;
+    LatLngBounds: new () => GoogleLatLngBounds;
+    Polyline: new (options: GooglePolylineOptions) => GooglePolyline;
+    event: {
+      addListenerOnce: (instance: unknown, eventName: string, handler: () => void) => GoogleEventListener;
+      removeListener: (listener: GoogleEventListener) => void;
+    };
+  };
+}
+
+/** Google Maps LatLngBounds */
+export interface GoogleLatLngBounds {
+  extend: (latLng: { lat: number; lng: number }) => void;
+  getCenter: () => GoogleLatLngResult;
+}
+
+/** Google Maps Event Listener */
+export interface GoogleEventListener {
+  remove: () => void;
+}
+
+/** Google Maps Polyline options */
+export interface GooglePolylineOptions {
+  path: { lat: number; lng: number }[];
+  strokeColor?: string;
+  strokeOpacity?: number;
+  strokeWeight?: number;
+  geodesic?: boolean;
+  icons?: GooglePolylineIcon[];
+  map?: unknown;
+  zIndex?: number;
+}
+
+/** Google Maps Polyline icon */
+export interface GooglePolylineIcon {
+  icon: {
+    path: string;
+    scale?: number;
+    fillColor?: string;
+    fillOpacity?: number;
+    strokeColor?: string;
+    strokeOpacity?: number;
+    strokeWeight?: number;
+  };
+  offset?: string;
+  repeat?: string;
+}
+
+/** Google Maps Polyline */
+export interface GooglePolyline {
+  setMap: (map: unknown | null) => void;
+  setPath: (path: { lat: number; lng: number }[]) => void;
+  getPath: () => { getArray: () => { lat: () => number; lng: () => number }[] };
+}
+
+export interface GoogleDirectionsService {
+  route(
+    request: GoogleDirectionsAPIRequest,
+    callback: (response: GoogleDirectionsResponse | null, status: string) => void
+  ): void;
+}
+
+export interface GoogleDirectionsAPIRequest {
+  origin: { lat: number; lng: number };
+  destination: { lat: number; lng: number };
+  travelMode: string;
+  avoidHighways?: boolean;
+  avoidTolls?: boolean;
+  avoidFerries?: boolean;
+  drivingOptions?: {
+    departureTime: Date;
+    trafficModel: string;
+  };
+  transitOptions?: {
+    departureTime: Date;
+    routingPreference: string;
+  };
+}
+
+export interface GoogleDirectionsResponse {
+  routes: GoogleRoute[];
+}
+
+export interface GoogleRoute {
+  summary: string;
+  legs: GoogleRouteLeg[];
+  overview_polyline: { points: string };
+  bounds: GoogleBounds;
+}
+
+export interface GoogleRouteLeg {
+  start_address: string;
+  end_address: string;
+  start_location: GoogleLatLngResult;
+  end_location: GoogleLatLngResult;
+  distance: { value: number; text: string };
+  duration: { value: number; text: string };
+  duration_in_traffic?: { value: number; text: string };
+  steps: GoogleRouteStep[];
+}
+
+export interface GoogleRouteStep {
+  instructions: string;
+  distance: { value: number; text: string };
+  duration: { value: number; text: string };
+  travel_mode: string;
+  polyline: { points: string };
+  transit?: GoogleTransitDetailsRaw;
+}
+
+export interface GoogleTransitDetailsRaw {
+  line: {
+    name: string;
+    short_name: string;
+    vehicle: { type: string; icon: string };
+    color?: string;
+  };
+  departure_stop: { name: string; location: GoogleLatLngResult };
+  arrival_stop: { name: string; location: GoogleLatLngResult };
+  departure_time: { value: Date };
+  arrival_time: { value: Date };
+  num_stops: number;
+}
+
+export interface GoogleBounds {
+  getNorthEast(): GoogleLatLngResult;
+  getSouthWest(): GoogleLatLngResult;
+}
+
+export interface GoogleLatLngResult {
+  lat(): number;
+  lng(): number;
+}
+
+export interface GoogleLatLng {
+  lat(): number;
+  lng(): number;
+}
+
+export interface GoogleGeocoder {
+  geocode(
+    request: { address: string },
+    callback: (results: GoogleGeocodeResult[] | null, status: string) => void
+  ): void;
+}
+
+export interface GoogleGeocodeResult {
+  geometry: { location: GoogleLatLngResult };
+  formatted_address: string;
+}
+
+export interface GoogleAutocompleteService {
+  getPlacePredictions(
+    request: GoogleAutocompletePredictionRequest,
+    callback: (predictions: GoogleAutocompletePrediction[] | null, status: string) => void
+  ): void;
+}
+
+export interface GoogleAutocompletePredictionRequest {
+  input: string;
+  sessionToken?: GoogleAutocompleteSessionToken;
+  types?: string[];
+  location?: GoogleLatLng;
+  radius?: number;
+}
+
+export interface GoogleAutocompletePrediction {
+  place_id: string;
+  description: string;
+  structured_formatting: {
+    main_text: string;
+    secondary_text?: string;
+  };
+  types: string[];
+}
+
+/** Opaque session token type */
+export interface GoogleAutocompleteSessionToken {
+  // Opaque token - no public properties
+  __brand: 'AutocompleteSessionToken';
+}
+
+export interface GooglePlacesService {
+  getDetails(
+    request: GooglePlaceDetailsRequest,
+    callback: (place: GooglePlace | null, status: string) => void
+  ): void;
+  nearbySearch(
+    request: GoogleNearbySearchRequest,
+    callback: (results: GooglePlaceResult[] | null, status: string) => void
+  ): void;
+}
+
+export interface GooglePlaceDetailsRequest {
+  placeId: string;
+  fields: string[];
+  sessionToken?: GoogleAutocompleteSessionToken;
+}
+
+export interface GooglePlace {
+  place_id: string;
+  name: string;
+  formatted_address: string;
+  geometry: { location: GoogleLatLngResult };
+  rating?: number;
+  user_ratings_total?: number;
+  price_level?: number;
+  formatted_phone_number?: string;
+  website?: string;
+  opening_hours?: {
+    isOpen?(): boolean;
+    weekday_text?: string[];
+    periods?: Array<{
+      open: { day: number; time: string };
+      close?: { day: number; time: string };
+    }>;
+  };
+  types: string[];
+  icon: string;
+  business_status?: string;
+}
+
+export interface GoogleNearbySearchRequest {
+  location: GoogleLatLng;
+  radius: number;
+  type?: string;
+  keyword?: string;
+  minPriceLevel?: number;
+  maxPriceLevel?: number;
+  openNow?: boolean;
+}
+
+export interface GooglePlaceResult {
+  place_id: string;
+  name: string;
+  geometry: { location: GoogleLatLngResult };
+  vicinity?: string;
+  rating?: number;
+  user_ratings_total?: number;
+  price_level?: number;
+  types: string[];
+  opening_hours?: {
+    isOpen?(): boolean;
+  };
+}
+
 // Re-export GeoCoordinates for convenience
 export type { GeoCoordinates };
 
@@ -229,6 +505,14 @@ export interface OptimizeRouteRequest {
   waypoints: OptimizationWaypoint[];
   travelMode: TravelMode;
   optimizeFor: 'distance' | 'duration';
+  departureTime?: Date;
+}
+
+/** Route optimization options */
+export interface OptimizationOptions {
+  fixFirst?: boolean;      // Keep first activity fixed (e.g., hotel)
+  fixLast?: boolean;       // Keep last activity fixed
+  preferredMode?: TravelMode;
   departureTime?: Date;
 }
 

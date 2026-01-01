@@ -1,7 +1,12 @@
-import React, { useState } from 'react';
-import { X, Check } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { X, Check, AlertCircle } from 'lucide-react';
 import type { ActivityQuickAddProps } from '@/types/planner';
 import type { ActivityType } from '@/types/itinerary';
+
+// Validation constants
+const MAX_DESCRIPTION_LENGTH = 500;
+const MAX_LOCATION_LENGTH = 200;
+const TIME_PATTERN = /^(\d{1,2}):?(\d{2})?\s*(AM|PM|am|pm)?$/;
 
 const ACTIVITY_TYPES: { value: ActivityType; label: string }[] = [
   { value: 'food', label: 'Food' },
@@ -10,8 +15,14 @@ const ACTIVITY_TYPES: { value: ActivityType; label: string }[] = [
   { value: 'travel', label: 'Travel' },
 ];
 
+interface ValidationErrors {
+  description?: string;
+  time?: string;
+  location?: string;
+}
+
 export function ActivityQuickAdd({
-  dayId,
+  dayId: _dayId,
   onSubmit,
   onCancel,
   defaultTime,
@@ -20,11 +31,79 @@ export function ActivityQuickAdd({
   const [time, setTime] = useState(defaultTime || '');
   const [type, setType] = useState<ActivityType>('activity');
   const [locationName, setLocationName] = useState('');
+  const [errors, setErrors] = useState<ValidationErrors>({});
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+
+  const validateField = useCallback((field: string, value: string): string | undefined => {
+    switch (field) {
+      case 'description':
+        if (!value.trim()) {
+          return 'Description is required';
+        }
+        if (value.length > MAX_DESCRIPTION_LENGTH) {
+          return `Description must be ${MAX_DESCRIPTION_LENGTH} characters or less`;
+        }
+        return undefined;
+      case 'time':
+        if (value && !TIME_PATTERN.test(value)) {
+          return 'Enter time like 9:00 AM or 14:30';
+        }
+        return undefined;
+      case 'location':
+        if (value.length > MAX_LOCATION_LENGTH) {
+          return `Location must be ${MAX_LOCATION_LENGTH} characters or less`;
+        }
+        return undefined;
+      default:
+        return undefined;
+    }
+  }, []);
+
+  const handleBlur = (field: string, value: string) => {
+    setTouched(prev => ({ ...prev, [field]: true }));
+    setErrors(prev => ({ ...prev, [field]: validateField(field, value) }));
+  };
+
+  const handleDescriptionChange = (value: string) => {
+    if (value.length <= MAX_DESCRIPTION_LENGTH) {
+      setDescription(value);
+      if (touched.description) {
+        setErrors(prev => ({ ...prev, description: validateField('description', value) }));
+      }
+    }
+  };
+
+  const handleLocationChange = (value: string) => {
+    if (value.length <= MAX_LOCATION_LENGTH) {
+      setLocationName(value);
+      if (touched.location) {
+        setErrors(prev => ({ ...prev, location: validateField('location', value) }));
+      }
+    }
+  };
+
+  const handleTimeChange = (value: string) => {
+    setTime(value);
+    if (touched.time) {
+      setErrors(prev => ({ ...prev, time: validateField('time', value) }));
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!description.trim()) {
+    // Validate all fields
+    const newErrors: ValidationErrors = {
+      description: validateField('description', description),
+      time: validateField('time', time),
+      location: validateField('location', locationName),
+    };
+
+    setErrors(newErrors);
+    setTouched({ description: true, time: true, location: true });
+
+    // Check for any errors
+    if (Object.values(newErrors).some(error => error)) {
       return;
     }
 
@@ -42,6 +121,8 @@ export function ActivityQuickAdd({
     setTime(defaultTime || '');
     setType('activity');
     setLocationName('');
+    setErrors({});
+    setTouched({});
   };
 
   return (
@@ -55,12 +136,24 @@ export function ActivityQuickAdd({
           <input
             type="text"
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={(e) => handleDescriptionChange(e.target.value)}
+            onBlur={() => handleBlur('description', description)}
             placeholder="e.g., Lunch at beachside cafe"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+              errors.description && touched.description ? 'border-red-500' : 'border-gray-300'
+            }`}
             autoFocus
-            required
+            maxLength={MAX_DESCRIPTION_LENGTH}
           />
+          {errors.description && touched.description && (
+            <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+              <AlertCircle size={14} />
+              {errors.description}
+            </p>
+          )}
+          <p className="mt-1 text-xs text-gray-400 text-right">
+            {description.length}/{MAX_DESCRIPTION_LENGTH}
+          </p>
         </div>
 
         {/* Type */}
@@ -89,10 +182,19 @@ export function ActivityQuickAdd({
           <input
             type="text"
             value={time}
-            onChange={(e) => setTime(e.target.value)}
+            onChange={(e) => handleTimeChange(e.target.value)}
+            onBlur={() => handleBlur('time', time)}
             placeholder="e.g., 12:00 PM"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+              errors.time && touched.time ? 'border-red-500' : 'border-gray-300'
+            }`}
           />
+          {errors.time && touched.time && (
+            <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+              <AlertCircle size={14} />
+              {errors.time}
+            </p>
+          )}
         </div>
 
         {/* Location */}
@@ -103,10 +205,25 @@ export function ActivityQuickAdd({
           <input
             type="text"
             value={locationName}
-            onChange={(e) => setLocationName(e.target.value)}
+            onChange={(e) => handleLocationChange(e.target.value)}
+            onBlur={() => handleBlur('location', locationName)}
             placeholder="e.g., Blue Bay Restaurant"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+              errors.location && touched.location ? 'border-red-500' : 'border-gray-300'
+            }`}
+            maxLength={MAX_LOCATION_LENGTH}
           />
+          {errors.location && touched.location && (
+            <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+              <AlertCircle size={14} />
+              {errors.location}
+            </p>
+          )}
+          {locationName.length > MAX_LOCATION_LENGTH - 50 && (
+            <p className="mt-1 text-xs text-gray-400 text-right">
+              {locationName.length}/{MAX_LOCATION_LENGTH}
+            </p>
+          )}
         </div>
 
         {/* Actions */}

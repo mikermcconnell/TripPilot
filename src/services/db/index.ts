@@ -8,8 +8,6 @@ import type {
   PhotoId,
   ActivityId,
   PackingList,
-  SyncQueueItem,
-  SyncStatus,
   TripStatus,
 } from '@/types';
 import type { MapsCacheEntry, DayTravelMatrix } from '@/types/maps';
@@ -56,15 +54,6 @@ export interface TripPilotDB extends DBSchema {
     value: PackingList;
   };
 
-  syncQueue: {
-    key: string;
-    value: SyncQueueItem;
-    indexes: {
-      'by-status': SyncStatus;
-      'by-created': string;
-    };
-  };
-
   cache: {
     key: string;              // Cache key (e.g., 'exchange_rates')
     value: {
@@ -106,7 +95,7 @@ export async function initDB(): Promise<IDBPDatabase<TripPilotDB>> {
 
   try {
     dbInstance = await openDB<TripPilotDB>(DB_NAME, DB_VERSION, {
-      upgrade(db, oldVersion, newVersion, transaction) {
+      upgrade(db, oldVersion, _newVersion, _transaction) {
         // Trips store
         if (!db.objectStoreNames.contains('trips')) {
           const tripStore = db.createObjectStore('trips', { keyPath: 'id' });
@@ -137,13 +126,6 @@ export async function initDB(): Promise<IDBPDatabase<TripPilotDB>> {
         // Packing lists store
         if (!db.objectStoreNames.contains('packingLists')) {
           db.createObjectStore('packingLists', { keyPath: 'tripId' });
-        }
-
-        // Sync queue store
-        if (!db.objectStoreNames.contains('syncQueue')) {
-          const syncStore = db.createObjectStore('syncQueue', { keyPath: 'id' });
-          syncStore.createIndex('by-status', 'status');
-          syncStore.createIndex('by-created', 'createdAt');
         }
 
         // Cache store
@@ -218,7 +200,7 @@ export async function clearAllData(): Promise<void> {
   const db = await getDB();
 
   const tx = db.transaction(
-    ['trips', 'expenses', 'photos', 'photoBlobs', 'packingLists', 'syncQueue', 'cache', 'mapsCache', 'dayTravelMatrices'],
+    ['trips', 'expenses', 'photos', 'photoBlobs', 'packingLists', 'cache', 'mapsCache', 'dayTravelMatrices'],
     'readwrite'
   );
 
@@ -228,7 +210,6 @@ export async function clearAllData(): Promise<void> {
     tx.objectStore('photos').clear(),
     tx.objectStore('photoBlobs').clear(),
     tx.objectStore('packingLists').clear(),
-    tx.objectStore('syncQueue').clear(),
     tx.objectStore('cache').clear(),
     tx.objectStore('mapsCache').clear(),
     tx.objectStore('dayTravelMatrices').clear(),

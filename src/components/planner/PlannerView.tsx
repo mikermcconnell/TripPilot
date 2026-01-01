@@ -1,6 +1,6 @@
-import React, { useEffect } from 'react';
+import { useEffect, Fragment, useState, useCallback } from 'react';
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
-import type { TripId } from '@/types';
+import type { TripId, Activity } from '@/types';
 import { useTripStore } from '@/stores/tripStore';
 import { usePlannerStore } from '@/stores/plannerStore';
 import { usePlannerUndo } from '@/hooks/usePlannerUndo';
@@ -10,15 +10,16 @@ import { PlannerDndContext } from './PlannerDndContext';
 import { DraggableDayColumn } from './DraggableDayColumn';
 import { DayQuickAdd } from './DayQuickAdd';
 import { ActivityQuickAdd } from './ActivityQuickAdd';
-import { nanoid } from 'nanoid';
+import { DeleteActivityModal } from './DeleteActivityModal';
+import { ActivityEditModal } from '@/components/features/activity/ActivityEditModal';
 import { format, addDays, parseISO } from 'date-fns';
 
 interface PlannerViewProps {
   tripId: TripId;
 }
 
-export function PlannerView({ tripId }: PlannerViewProps) {
-  const { activeTrip, addActivity, addDayAtPosition, removeDayById } = useTripStore();
+export function PlannerView({ tripId: _tripId }: PlannerViewProps) {
+  const { activeTrip, addActivity, addDayAtPosition, removeDayById, deleteActivity, updateActivity } = useTripStore();
   const {
     quickAddDayPosition,
     quickAddActivityDayId,
@@ -31,6 +32,12 @@ export function PlannerView({ tripId }: PlannerViewProps) {
   } = usePlannerStore();
 
   const { undo, redo, canUndo, canRedo, pushSnapshot } = usePlannerUndo();
+
+  // Edit/delete activity state
+  const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
+  const [editingActivityDayId, setEditingActivityDayId] = useState<string | null>(null);
+  const [deletingActivity, setDeletingActivity] = useState<Activity | null>(null);
+  const [deletingActivityDayId, setDeletingActivityDayId] = useState<string | null>(null);
 
   // Reset planner state on unmount
   useEffect(() => {
@@ -73,7 +80,7 @@ export function PlannerView({ tripId }: PlannerViewProps) {
 
   const days = activeTrip.itinerary.days;
 
-  const handleAddDay = async (date: string) => {
+  const handleAddDay = async (_date: string) => {
     const position = quickAddDayPosition === 'start' ? 0 : quickAddDayPosition === 'end' ? days.length : quickAddDayPosition as number;
 
     pushSnapshot(`Add day at ${quickAddDayPosition}`);
@@ -120,6 +127,57 @@ export function PlannerView({ tripId }: PlannerViewProps) {
     return activeTrip.startDate;
   };
 
+  // Activity edit/delete handlers
+  const handleEditActivity = useCallback((activity: Activity) => {
+    // Find which day this activity belongs to
+    const day = days.find(d => d.activities.some(a => a.id === activity.id));
+    if (day) {
+      setEditingActivity(activity);
+      setEditingActivityDayId(day.id);
+    }
+  }, [days]);
+
+  const handleDeleteActivity = useCallback((dayId: string, activityId: string) => {
+    const day = days.find(d => d.id === dayId);
+    const activity = day?.activities.find(a => a.id === activityId);
+    if (activity) {
+      setDeletingActivity(activity);
+      setDeletingActivityDayId(dayId);
+    }
+  }, [days]);
+
+  const handleConfirmDeleteActivity = async () => {
+    if (!deletingActivityDayId || !deletingActivity) return;
+
+    const day = days.find(d => d.id === deletingActivityDayId);
+    if (!day) return;
+
+    pushSnapshot(`Delete activity from Day ${day.dayNumber}`);
+    await deleteActivity(deletingActivityDayId, deletingActivity.id);
+    setDeletingActivity(null);
+    setDeletingActivityDayId(null);
+  };
+
+  const handleSaveActivity = async (updates: Partial<Activity>) => {
+    if (!editingActivityDayId || !editingActivity) return;
+
+    const day = days.find(d => d.id === editingActivityDayId);
+    if (!day) return;
+
+    pushSnapshot(`Update activity in Day ${day.dayNumber}`);
+    await updateActivity(editingActivityDayId, editingActivity.id, updates);
+    setEditingActivity(null);
+    setEditingActivityDayId(null);
+  };
+
+  const getDayNumberForActivity = (): number => {
+    if (deletingActivityDayId) {
+      const day = days.find(d => d.id === deletingActivityDayId);
+      return day?.dayNumber || 0;
+    }
+    return 0;
+  };
+
   return (
     <div className="flex flex-col h-full bg-gray-100">
       <PlannerToolbar
@@ -150,13 +208,15 @@ export function PlannerView({ tripId }: PlannerViewProps) {
 
               {/* Days */}
               {days.map((day, index) => (
-                <React.Fragment key={day.id}>
+                <Fragment key={day.id}>
                   <DraggableDayColumn
                     day={day}
                     index={index}
                     isActive={false}
                     isDragging={false}
                     isDropTarget={false}
+                    onEditActivity={handleEditActivity}
+                    onDeleteActivity={handleDeleteActivity}
                   />
 
                   {/* Activity Quick Add */}
@@ -169,7 +229,7 @@ export function PlannerView({ tripId }: PlannerViewProps) {
                       />
                     </div>
                   )}
-                </React.Fragment>
+                </Fragment>
               ))}
 
               {/* Add Day at End */}
@@ -226,6 +286,30 @@ export function PlannerView({ tripId }: PlannerViewProps) {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Delete Activity Confirmation Modal */}
+      <DeleteActivityModal
+        isOpen={!!deletingActivity}
+        activity={deletingActivity}
+        dayNumber={getDayNumberForActivity()}
+        onClose={() => {
+          setDeletingActivity(null);
+          setDeletingActivityDayId(null);
+        }}
+        onConfirm={handleConfirmDeleteActivity}
+      />
+
+      {/* Edit Activity Modal */}
+      {editingActivity && (
+        <ActivityEditModal
+          activity={editingActivity}
+          onClose={() => {
+            setEditingActivity(null);
+            setEditingActivityDayId(null);
+          }}
+          onSave={(updatedActivity: Activity) => handleSaveActivity(updatedActivity)}
+        />
       )}
     </div>
   );

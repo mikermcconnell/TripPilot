@@ -1,4 +1,4 @@
-import { MarkerClusterer } from '@googlemaps/markerclusterer';
+import { MarkerClusterer, GridAlgorithm } from '@googlemaps/markerclusterer';
 
 /**
  * Marker Clustering Configuration
@@ -121,7 +121,7 @@ export function createMarkerClusterer(
     markers,
     renderer,
     // Clustering algorithm options
-    algorithm: new MarkerClusterer.GridAlgorithm({
+    algorithm: new GridAlgorithm({
       gridSize: mergedConfig.gridSize,
       maxZoom: mergedConfig.maxZoom,
     }),
@@ -173,7 +173,8 @@ export function updateClustererConfig(
   map: google.maps.Map,
   config: ClusterConfig
 ): MarkerClusterer {
-  const existingMarkers = clusterer.markers as google.maps.marker.AdvancedMarkerElement[];
+  // Access protected markers property via type assertion
+  const existingMarkers = (clusterer as unknown as { markers: google.maps.marker.AdvancedMarkerElement[] }).markers;
   clusterer.clearMarkers();
   clusterer.setMap(null);
 

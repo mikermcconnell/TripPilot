@@ -4,6 +4,13 @@ import type {
   NearbySearchRequest,
   NearbyPlace,
   GeoCoordinates,
+  GoogleMapsAPI,
+  GoogleGeocodeResult,
+  GoogleAutocompletePrediction,
+  GooglePlace,
+  GooglePlaceResult,
+  GoogleAutocompleteSessionToken,
+  GoogleLatLng,
 } from '@/types/maps';
 import { mapsCacheRepository } from '@/services/db/mapsCacheRepository';
 import {
@@ -12,7 +19,7 @@ import {
   getDistanceKm,
 } from '@/utils/geo';
 
-declare const google: any;
+declare const google: GoogleMapsAPI;
 
 // Fields to request from Place Details API
 // Using Basic fields to minimize cost
@@ -39,10 +46,10 @@ import { MAPS_CONFIG } from '@/config/mapsConfig';
  * Prevents token leaks by enforcing maximum session duration
  */
 class SessionTokenManager {
-  private token: any = null;
+  private token: GoogleAutocompleteSessionToken | null = null;
   private sessionStart: number | null = null;
 
-  getToken(): any {
+  getToken(): GoogleAutocompleteSessionToken {
     const now = Date.now();
 
     // Force refresh after maximum session duration
@@ -84,7 +91,7 @@ export const placesService = {
 
         geocoder.geocode(
           { address: locationName.trim() },
-          (results: any[], status: string) => {
+          (results: GoogleGeocodeResult[] | null, status: string) => {
             if (status === 'OK' && results && results.length > 0) {
               const result = results[0];
               resolve({
@@ -125,10 +132,12 @@ export const placesService = {
       const service = new google.maps.places.AutocompleteService();
       const sessionToken = sessionTokenManager.getToken();
 
-      const request: any = {
+      const request = {
         input: sanitizedInput,
         sessionToken,
         types: options?.types || ['establishment', 'geocode'],
+        location: undefined as GoogleLatLng | undefined,
+        radius: undefined as number | undefined,
       };
 
       // Add location bias if provided (bias results to trip area)
@@ -140,7 +149,7 @@ export const placesService = {
         request.radius = options.radius || MAPS_CONFIG.AUTOCOMPLETE.DEFAULT_RADIUS;
       }
 
-      service.getPlacePredictions(request, (predictions: any[], status: string) => {
+      service.getPlacePredictions(request, (predictions: GoogleAutocompletePrediction[] | null, status: string) => {
         if (status !== 'OK' && status !== 'ZERO_RESULTS') {
           reject(new Error(`Autocomplete failed: ${status}`));
           return;
@@ -179,9 +188,10 @@ export const placesService = {
       const container = document.createElement('div');
       const service = new google.maps.places.PlacesService(container);
 
-      const request: any = {
+      const request = {
         placeId,
         fields: PLACE_FIELDS,
+        sessionToken: undefined as GoogleAutocompleteSessionToken | undefined,
       };
 
       // Use session token if this follows autocomplete
@@ -191,8 +201,8 @@ export const placesService = {
         sessionTokenManager.clearToken();
       }
 
-      service.getDetails(request, async (place: any, status: string) => {
-        if (status !== 'OK') {
+      service.getDetails(request, async (place: GooglePlace | null, status: string) => {
+        if (status !== 'OK' || !place) {
           reject(new Error(`Place details failed: ${status}`));
           return;
         }
@@ -207,7 +217,7 @@ export const placesService = {
           },
           rating: place.rating,
           userRatingsTotal: place.user_ratings_total,
-          priceLevel: place.price_level,
+          priceLevel: place.price_level as 0 | 1 | 2 | 3 | 4 | undefined,
           phoneNumber: place.formatted_phone_number,
           website: place.website,
           openingHours: place.opening_hours
@@ -219,7 +229,7 @@ export const placesService = {
             : undefined,
           types: place.types || [],
           iconUrl: place.icon,
-          businessStatus: place.business_status,
+          businessStatus: place.business_status as 'OPERATIONAL' | 'CLOSED_TEMPORARILY' | 'CLOSED_PERMANENTLY' | undefined,
           fetchedAt: new Date().toISOString(),
         };
 
@@ -251,7 +261,7 @@ export const placesService = {
       const container = document.createElement('div');
       const service = new google.maps.places.PlacesService(container);
 
-      const searchRequest: any = {
+      const searchRequest = {
         location: new google.maps.LatLng(
           request.location.lat,
           request.location.lng
@@ -260,16 +270,11 @@ export const placesService = {
         type: request.type,
         keyword: request.keyword,
         openNow: request.openNow,
+        minPriceLevel: request.minPrice,
+        maxPriceLevel: request.maxPrice,
       };
 
-      if (request.minPrice !== undefined) {
-        searchRequest.minPriceLevel = request.minPrice;
-      }
-      if (request.maxPrice !== undefined) {
-        searchRequest.maxPriceLevel = request.maxPrice;
-      }
-
-      service.nearbySearch(searchRequest, async (results: any[], status: string) => {
+      service.nearbySearch(searchRequest, async (results: GooglePlaceResult[] | null, status: string) => {
         if (status !== 'OK' && status !== 'ZERO_RESULTS') {
           reject(new Error(`Nearby search failed: ${status}`));
           return;
