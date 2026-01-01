@@ -38,17 +38,25 @@ export default defineConfig(({ mode }) => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+          // Exclude Google Maps API from service worker - causes CSP/caching issues
+          navigateFallbackDenylist: [/^\/api/, /^\/auth/],
           runtimeCaching: [
             {
-              urlPattern: /^https:\/\/maps\.googleapis\.com\/.*/i,
+              // Only cache static Google Maps tiles/images
+              urlPattern: /^https:\/\/maps\.(googleapis|gstatic)\.com\/.*\.(png|jpg|jpeg|gif|webp)$/i,
               handler: 'CacheFirst',
               options: {
-                cacheName: 'google-maps-cache',
+                cacheName: 'google-maps-tiles',
                 expiration: {
-                  maxEntries: 50,
+                  maxEntries: 100,
                   maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
                 }
               }
+            },
+            {
+              // Network-only for Google Maps API calls (JS, gen_204, etc.)
+              urlPattern: /^https:\/\/maps\.googleapis\.com\/maps\/api\/.*/i,
+              handler: 'NetworkOnly'
             }
           ]
         }

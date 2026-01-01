@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MapPin, Search, X, Loader2 } from 'lucide-react';
+import { MapPin, Search, X, Loader2, RotateCcw } from 'lucide-react';
 import { usePlacesAutocomplete } from '@/hooks/usePlacesAutocomplete';
 import { placesService } from '@/services/maps/placesService';
 import type { LocationData } from '@/types';
@@ -7,6 +7,7 @@ import type { LocationData } from '@/types';
 interface DayLocationEditorProps {
   location?: LocationData;
   onLocationChange: (location: LocationData) => void;
+  onReset?: () => void;
   placeholder?: string;
   className?: string;
 }
@@ -14,6 +15,7 @@ interface DayLocationEditorProps {
 export const DayLocationEditor: React.FC<DayLocationEditorProps> = ({
   location,
   onLocationChange,
+  onReset,
   placeholder = 'Set city or location...',
   className = '',
 }) => {
@@ -118,19 +120,37 @@ export const DayLocationEditor: React.FC<DayLocationEditorProps> = ({
     }
   };
 
+  // Handle reset
+  const handleReset = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onReset?.();
+  };
+
   // Display mode - show current location or placeholder
   if (!isEditing) {
     return (
-      <button
-        onClick={() => setIsEditing(true)}
-        className={`group flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all hover:bg-slate-100 ${className}`}
-      >
-        <MapPin className={`w-4 h-4 ${location?.name ? 'text-blue-500' : 'text-slate-400'}`} />
-        <span className={`text-sm font-medium ${location?.name ? 'text-slate-700' : 'text-slate-400 italic'}`}>
-          {location?.name || placeholder}
-        </span>
-        <Search className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-      </button>
+      <div className={`group flex items-center gap-1 ${className}`}>
+        <button
+          onClick={() => setIsEditing(true)}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all hover:bg-slate-100"
+        >
+          <MapPin className={`w-4 h-4 ${location?.name ? 'text-blue-500' : 'text-slate-400'}`} />
+          <span className={`text-sm font-medium ${location?.name ? 'text-slate-700' : 'text-slate-400 italic'}`}>
+            {location?.name || placeholder}
+          </span>
+          <Search className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+        </button>
+        {/* Reset button - only show when there's a location set */}
+        {location?.name && onReset && (
+          <button
+            onClick={handleReset}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
+            title="Reset to default"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
     );
   }
 

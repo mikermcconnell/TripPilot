@@ -361,6 +361,7 @@ interface SortableDayCardProps {
   handleOpenAddDayModal: (position: number) => void;
   handleOpenAddActivityModal: (dayNumber: number, dayId: string, period: TimePeriod) => void;
   handleDayLocationChange: (dayId: string, location: LocationData) => void;
+  handleDayLocationReset: (dayId: string) => void;
 }
 
 function SortableDayCard({
@@ -378,6 +379,7 @@ function SortableDayCard({
   handleOpenAddDayModal,
   handleOpenAddActivityModal,
   handleDayLocationChange,
+  handleDayLocationReset,
 }: SortableDayCardProps) {
   const {
     attributes,
@@ -467,6 +469,7 @@ function SortableDayCard({
                 <DayLocationEditor
                   location={day.primaryLocation}
                   onLocationChange={(location) => handleDayLocationChange(day.id, location)}
+                  onReset={() => handleDayLocationReset(day.id)}
                   placeholder="Set location..."
                 />
               </div>
@@ -595,7 +598,7 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({
   const [addActivityModalOpen, setAddActivityModalOpen] = useState(false);
   const [addActivityDayInfo, setAddActivityDayInfo] = useState<{ dayNumber: number; dayId: string; period: TimePeriod } | null>(null);
 
-  const { reorderActivitiesInDay, moveActivityBetweenDays, addDayWithLocation, addActivity, updateDayLocation, updateDayTravel, reorderDays } = useTripStore();
+  const { reorderActivitiesInDay, moveActivityBetweenDays, addDayWithLocation, addActivity, updateDayLocation, resetDayLocation, updateDayTravel, reorderDays } = useTripStore();
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -762,6 +765,15 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({
     }
   };
 
+  // Handler for resetting day's primary location
+  const handleDayLocationReset = async (dayId: string) => {
+    try {
+      await resetDayLocation(dayId);
+    } catch (error) {
+      console.error('Failed to reset day location:', error);
+    }
+  };
+
   if (!days || days.length === 0) {
     return (
       <div className="h-full bg-gradient-to-b from-emerald-50/50 to-slate-50/30">
@@ -848,6 +860,7 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({
                     handleOpenAddDayModal={handleOpenAddDayModal}
                     handleOpenAddActivityModal={handleOpenAddActivityModal}
                     handleDayLocationChange={handleDayLocationChange}
+                    handleDayLocationReset={handleDayLocationReset}
                   />
                 </React.Fragment>
               );

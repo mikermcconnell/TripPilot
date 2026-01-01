@@ -88,6 +88,9 @@ interface TripState {
     dayId: string,
     location: LocationData
   ) => Promise<void>;
+  resetDayLocation: (
+    dayId: string
+  ) => Promise<void>;
   updateDayTravel: (
     dayId: string,
     travel: InterDayTravel | undefined
@@ -813,6 +816,32 @@ export const useTripStore = create<TripState>()(
           ...newDays[dayIndex],
           primaryLocation: location,
         };
+
+        const updatedItinerary: Itinerary = {
+          ...activeTrip.itinerary,
+          days: newDays,
+        };
+
+        const updatedTrip: Partial<Trip> = {
+          itinerary: updatedItinerary,
+          updatedAt: new Date().toISOString(),
+        };
+
+        await get().updateTrip(activeTrip.id, updatedTrip);
+      },
+
+      // Reset/clear day's primary location
+      resetDayLocation: async (dayId: string) => {
+        const { activeTrip } = get();
+        if (!activeTrip) return;
+
+        const dayIndex = activeTrip.itinerary.days.findIndex(d => d.id === dayId);
+        if (dayIndex === -1) return;
+
+        const newDays = [...activeTrip.itinerary.days];
+        // Remove the primaryLocation property
+        const { primaryLocation: _, ...dayWithoutLocation } = newDays[dayIndex];
+        newDays[dayIndex] = dayWithoutLocation as typeof newDays[number];
 
         const updatedItinerary: Itinerary = {
           ...activeTrip.itinerary,
