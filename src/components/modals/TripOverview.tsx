@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { DayItinerary, Trip } from '@/types';
 import { MapPin, ChevronDown, Plane, Car, Utensils, Camera, CalendarDays, Hash, Clock, ExternalLink } from 'lucide-react';
+import { parseISO, format } from 'date-fns';
 
 interface TripOverviewProps {
   days: DayItinerary[];
@@ -273,7 +274,7 @@ const TripOverview: React.FC<TripOverviewProps> = ({ days, trip, onDaySelect, on
                     </div>
                     <div>
                       <h3 className="text-lg font-extrabold text-slate-700 group-hover:text-blue-600 transition-colors">
-                        {new Date(day.date).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
+                        {format(parseISO(day.date), 'EEEE, MMM d')}
                       </h3>
                       {/* First activity preview */}
                       <div className="flex items-center gap-2 mt-1 text-slate-500 text-sm font-medium">

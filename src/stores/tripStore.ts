@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { nanoid } from 'nanoid';
+import { parseISO, format, addDays as dateFnsAddDays } from 'date-fns';
 import type {
   Trip,
   TripId,
@@ -169,21 +170,20 @@ export const useTripStore = create<TripState>()(
         const now = new Date().toISOString();
         const tripId = nanoid() as TripId;
 
-        // Parse dates to calculate days
-        const start = new Date(input.startDate);
-        const end = new Date(input.endDate);
+        // Parse dates to calculate days (use parseISO to avoid timezone issues)
+        const start = parseISO(input.startDate);
+        const end = parseISO(input.endDate);
         const daysCount = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
         // Generate empty days
         const days: DayItinerary[] = [];
         for (let i = 0; i < daysCount; i++) {
-          const dayDate = new Date(start);
-          dayDate.setDate(start.getDate() + i);
+          const dayDate = dateFnsAddDays(start, i);
 
           days.push({
             id: nanoid(),
             dayNumber: i + 1,
-            date: dayDate.toISOString().split('T')[0], // YYYY-MM-DD
+            date: format(dayDate, 'yyyy-MM-dd'), // YYYY-MM-DD in local time
             activities: [],
           });
         }
@@ -413,18 +413,17 @@ export const useTripStore = create<TripState>()(
 
         const existingDays = [...activeTrip.itinerary.days];
 
-        // Create new days with IDs and proper dates
+        // Create new days with IDs and proper dates (use parseISO to avoid timezone issues)
         const lastDay = existingDays[existingDays.length - 1];
-        const lastDate = lastDay ? new Date(lastDay.date) : new Date(activeTrip.startDate);
+        const lastDate = lastDay ? parseISO(lastDay.date) : parseISO(activeTrip.startDate);
 
         const newDays: DayItinerary[] = days.map((day, index) => {
-          const dayDate = new Date(lastDate);
-          dayDate.setDate(dayDate.getDate() + index + 1);
+          const dayDate = dateFnsAddDays(lastDate, index + 1);
 
           return {
             id: nanoid(),
             dayNumber: existingDays.length + index + 1,
-            date: dayDate.toISOString().split('T')[0],
+            date: format(dayDate, 'yyyy-MM-dd'),
             activities: (day.activities || []).map(a => ({
               ...a,
               id: nanoid(),

@@ -1,5 +1,5 @@
 import { Sun, Check, Calendar } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { useTripStore } from '@/stores';
 import { useTodayView } from '@/hooks/useTodayView';
 import { NextActivityCard } from './NextActivityCard';
@@ -63,8 +63,8 @@ export function TodayView() {
   }
 
   if (!todayData.currentDay) {
-    const tripStart = format(new Date(activeTrip.startDate), 'MMMM d, yyyy');
-    const tripEnd = format(new Date(activeTrip.endDate), 'MMMM d, yyyy');
+    const tripStart = format(parseISO(activeTrip.startDate), 'MMMM d, yyyy');
+    const tripEnd = format(parseISO(activeTrip.endDate), 'MMMM d, yyyy');
 
     return (
       <div className="h-full overflow-y-auto custom-scrollbar p-6 pb-24">
@@ -111,7 +111,7 @@ export function TodayView() {
             Rest Day
           </h3>
           <p className="text-emerald-700 font-medium">
-            Day {todayData.currentDay.dayNumber} • {format(new Date(todayData.currentDay.date), 'EEEE, MMMM d')}
+            Day {todayData.currentDay.dayNumber} • {format(parseISO(todayData.currentDay.date), 'EEEE, MMMM d')}
           </p>
           <p className="text-sm text-emerald-600 mt-4">
             No activities planned. Enjoy your free time!
@@ -133,7 +133,7 @@ export function TodayView() {
             </h2>
           </div>
           <p className="text-sm font-bold text-slate-400 ml-9">
-            Day {todayData.currentDay.dayNumber} • {format(new Date(todayData.currentDay.date), 'EEEE, MMMM d')}
+            Day {todayData.currentDay.dayNumber} • {format(parseISO(todayData.currentDay.date), 'EEEE, MMMM d')}
           </p>
         </div>
         <DayProgress {...todayData.progress} />

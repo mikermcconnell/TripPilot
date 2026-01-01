@@ -24,6 +24,12 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   _unsubscribeTrips: null,
 
   initialize: () => {
+    // Handle redirect result on page load (for sign-in redirect flow)
+    authService.handleRedirectResult().catch((error) => {
+      console.error('Redirect result error:', error);
+      set({ error: error instanceof Error ? error.message : 'Sign in failed' });
+    });
+
     return authService.onAuthStateChange(async (user) => {
       // Cleanup previous listener if exists
       const currentUnsubscribe = get()._unsubscribeTrips;
@@ -65,11 +71,15 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   signInWithGoogle: async () => {
     set({ isLoading: true, error: null });
     try {
+      // This will redirect to Google - the page will navigate away
       await authService.signInWithGoogle();
+      // Note: We won't reach here normally as the page redirects
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Sign in failed' });
-    } finally {
-      set({ isLoading: false });
+      // Only reached if redirect fails to start
+      set({
+        error: error instanceof Error ? error.message : 'Sign in failed',
+        isLoading: false
+      });
     }
   },
 

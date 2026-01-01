@@ -1,5 +1,6 @@
 import {
-  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
   signOut as firebaseSignOut,
   onAuthStateChanged,
@@ -12,10 +13,24 @@ import type { UserProfile } from '@/types/auth';
 const googleProvider = new GoogleAuthProvider();
 
 export const authService = {
-  async signInWithGoogle(): Promise<User> {
-    const result = await signInWithPopup(auth, googleProvider);
-    await this.createOrUpdateUserProfile(result.user);
-    return result.user;
+  async signInWithGoogle(): Promise<void> {
+    // Use redirect instead of popup to avoid COOP issues on deployed apps
+    await signInWithRedirect(auth, googleProvider);
+    // The result will be handled by handleRedirectResult after the page reloads
+  },
+
+  async handleRedirectResult(): Promise<User | null> {
+    try {
+      const result = await getRedirectResult(auth);
+      if (result?.user) {
+        await this.createOrUpdateUserProfile(result.user);
+        return result.user;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error handling redirect result:', error);
+      throw error;
+    }
   },
 
   async signOut(): Promise<void> {

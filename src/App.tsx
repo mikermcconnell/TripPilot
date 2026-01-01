@@ -19,6 +19,7 @@ const TripOverview = lazy(() => import('@/components/modals/TripOverview'));
 const CountryOverview = lazy(() => import('@/components/modals/CountryOverview'));
 const TravelView = lazy(() => import('@/components/modals/TravelView'));
 const ImportModal = lazy(() => import('@/components/modals/ImportModal'));
+const ExportModal = lazy(() => import('@/components/modals/ExportModal'));
 const TodayView = lazy(() => import('@/components/features/today/TodayView').then(m => ({ default: m.TodayView })));
 const TripList = lazy(() => import('@/components/features/trips/TripList').then(m => ({ default: m.TripList })));
 const PlannerView = lazy(() => import('@/components/planner').then(m => ({ default: m.PlannerView })));
@@ -73,6 +74,7 @@ const App: React.FC = () => {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isCreateTripOpen, setIsCreateTripOpen] = useState(false);
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
+  const [exportingTrip, setExportingTrip] = useState<Trip | null>(null);
 
   // Handler for creating trips from chat
   const handleChatTripCreate = useCallback(async (input: CreateTripInput, itinerary: Itinerary): Promise<void> => {
@@ -275,29 +277,9 @@ const App: React.FC = () => {
 
   const handleTripExport = useCallback((tripId: TripId) => {
     const trip = trips.find(t => t.id === tripId);
-    if (!trip) return;
-
-    // Create a clean export object
-    const exportData = {
-      title: trip.title,
-      destination: trip.destination,
-      startDate: trip.startDate,
-      endDate: trip.endDate,
-      timezone: trip.timezone,
-      itinerary: trip.itinerary,
-      exportedAt: new Date().toISOString(),
-    };
-
-    // Create and download file
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${trip.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_itinerary.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    if (trip) {
+      setExportingTrip(trip);
+    }
   }, [trips]);
 
   const handleTripDelete = useCallback(async (tripId: TripId) => {
@@ -533,6 +515,17 @@ const App: React.FC = () => {
           onClose={() => setIsImportOpen(false)}
           onImport={handleImport}
         />
+      </Suspense>
+
+      {/* Export Modal */}
+      <Suspense fallback={null}>
+        {exportingTrip && (
+          <ExportModal
+            isOpen={!!exportingTrip}
+            onClose={() => setExportingTrip(null)}
+            trip={exportingTrip}
+          />
+        )}
       </Suspense>
 
       {/* Trip Settings Modal */}

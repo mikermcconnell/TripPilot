@@ -38,12 +38,13 @@ export default defineConfig(({ mode }) => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-          // Exclude Google Maps API from service worker - causes CSP/caching issues
           navigateFallbackDenylist: [/^\/api/, /^\/auth/],
+          // Don't let the service worker intercept Google Maps/Firebase requests
+          // This prevents CSP test failures and network errors
           runtimeCaching: [
             {
-              // Only cache static Google Maps tiles/images
-              urlPattern: /^https:\/\/maps\.(googleapis|gstatic)\.com\/.*\.(png|jpg|jpeg|gif|webp)$/i,
+              // Cache static map tiles only (images)
+              urlPattern: /^https:\/\/maps\.gstatic\.com\/.*\.(png|jpg|jpeg|gif|webp)$/i,
               handler: 'CacheFirst',
               options: {
                 cacheName: 'google-maps-tiles',
@@ -52,13 +53,12 @@ export default defineConfig(({ mode }) => {
                   maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
                 }
               }
-            },
-            {
-              // Network-only for Google Maps API calls (JS, gen_204, etc.)
-              urlPattern: /^https:\/\/maps\.googleapis\.com\/maps\/api\/.*/i,
-              handler: 'NetworkOnly'
             }
-          ]
+          ],
+          // Exclude external APIs from service worker completely
+          // This prevents the SW from intercepting and failing on CSP tests
+          skipWaiting: true,
+          clientsClaim: true
         }
       })
     ],

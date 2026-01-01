@@ -3,6 +3,7 @@ import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Plus, Trash2, Calendar } from 'lucide-react';
+import { parseISO, format } from 'date-fns';
 import type { DraggableDayColumnProps } from '@/types/planner';
 import type { Activity } from '@/types/itinerary';
 import { DraggableActivityCard } from './DraggableActivityCard';
@@ -98,11 +99,7 @@ export function DraggableDayColumn({
             </div>
             <div className="flex items-center gap-1 text-sm text-gray-600">
               <Calendar size={14} />
-              <span>{new Date(day.date).toLocaleDateString('en-US', {
-                weekday: 'short',
-                month: 'short',
-                day: 'numeric'
-              })}</span>
+              <span>{format(parseISO(day.date), 'EEE, MMM d')}</span>
             </div>
           </div>
 

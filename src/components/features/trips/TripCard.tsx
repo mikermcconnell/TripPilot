@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { MapPin, Calendar, Clock, MoreVertical, Pencil, Copy, Archive, Download, Trash2, ArchiveRestore } from 'lucide-react';
-import { format, differenceInDays } from 'date-fns';
+import { format, differenceInDays, parseISO } from 'date-fns';
 import type { TripSummary, TripId } from '@/types';
 
 interface TripCardProps {
@@ -46,8 +46,8 @@ export function TripCard({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
-  const startDate = new Date(trip.startDate);
-  const endDate = new Date(trip.endDate);
+  const startDate = parseISO(trip.startDate);
+  const endDate = parseISO(trip.endDate);
   const duration = differenceInDays(endDate, startDate) + 1;
   const dayCount = trip.daysCount;
   const isArchived = trip.status === 'archived';

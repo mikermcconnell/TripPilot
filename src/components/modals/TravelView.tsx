@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { DayItinerary, Activity } from '@/types';
 import { MapPin, Footprints, Car, Train, Plane, Navigation, ThumbsUp, Lightbulb, CheckCircle2, AlertCircle, Clock, Ticket, Hash } from 'lucide-react';
 import { getDistanceKm, getRecommendedMode, estimateTime } from '@/utils/geo';
+import { parseISO, format } from 'date-fns';
 
 /**
  * Convert km to miles
@@ -305,7 +306,7 @@ const TravelView: React.FC<TravelViewProps> = ({ days, onDaySelect, onLegHover, 
                 </div>
                 <div className="flex-1 bg-white px-4 py-2 rounded-xl border-2 border-slate-200 group-hover:border-blue-300 transition-colors">
                   <h3 className="font-bold text-slate-700">
-                    {new Date(day.date).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
+                    {format(parseISO(day.date), 'EEEE, MMM d')}
                   </h3>
                   {dayStats.dayLegs > 0 && (
                     <div className="flex items-center gap-3 mt-1">
