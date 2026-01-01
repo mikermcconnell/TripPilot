@@ -1,9 +1,14 @@
 import {
   signInWithRedirect,
+  signInWithPopup,
   getRedirectResult,
   GoogleAuthProvider,
   signOut as firebaseSignOut,
   onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
+  updateProfile,
   User,
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
@@ -14,9 +19,41 @@ const googleProvider = new GoogleAuthProvider();
 
 export const authService = {
   async signInWithGoogle(): Promise<void> {
-    // Use redirect instead of popup to avoid COOP issues on deployed apps
-    await signInWithRedirect(auth, googleProvider);
-    // The result will be handled by handleRedirectResult after the page reloads
+    // Try popup first, fall back to redirect if COOP issues
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      if (result?.user) {
+        await this.createOrUpdateUserProfile(result.user);
+      }
+    } catch (error: any) {
+      // If popup blocked or COOP issue, use redirect
+      if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user') {
+        await signInWithRedirect(auth, googleProvider);
+      } else {
+        throw error;
+      }
+    }
+  },
+
+  async signUpWithEmail(email: string, password: string, displayName: string): Promise<User> {
+    const result = await createUserWithEmailAndPassword(auth, email, password);
+
+    // Update display name
+    await updateProfile(result.user, { displayName });
+
+    // Create user profile in Firestore
+    await this.createOrUpdateUserProfile(result.user);
+
+    return result.user;
+  },
+
+  async signInWithEmail(email: string, password: string): Promise<User> {
+    const result = await signInWithEmailAndPassword(auth, email, password);
+    return result.user;
+  },
+
+  async resetPassword(email: string): Promise<void> {
+    await sendPasswordResetEmail(auth, email);
   },
 
   async handleRedirectResult(): Promise<User | null> {

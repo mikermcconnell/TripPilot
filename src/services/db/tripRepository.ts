@@ -144,6 +144,45 @@ export class TripRepository {
     const db = await getDB();
     await db.put('trips', trip);
   }
+
+  /**
+   * Get all local-only trips (not synced to cloud)
+   * Used for syncing when user signs in
+   */
+  async getLocalOnly(): Promise<Trip[]> {
+    const allTrips = await this.getAll();
+    return allTrips.filter(trip => trip.isLocalOnly === true);
+  }
+
+  /**
+   * Mark a trip as synced (no longer local-only)
+   */
+  async markAsSynced(id: TripId): Promise<void> {
+    const db = await getDB();
+    const existing = await db.get('trips', id);
+
+    if (!existing) {
+      throw new Error(`Trip ${id} not found`);
+    }
+
+    const updated: Trip = {
+      ...existing,
+      isLocalOnly: false,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await db.put('trips', updated);
+  }
+
+  /**
+   * Clear all local trips (after successful sync or logout)
+   */
+  async clearLocalTrips(): Promise<void> {
+    const localTrips = await this.getLocalOnly();
+    for (const trip of localTrips) {
+      await this.delete(trip.id);
+    }
+  }
 }
 
 // Export singleton instance

@@ -15,6 +15,7 @@ import type {
   NewDayWithoutIds,
 } from '@/types';
 import { tripFirestoreService } from '@/services/firebase/tripFirestoreService';
+import { tripRepository } from '@/services/db/tripRepository';
 import { auth } from '@/config/firebase';
 import { placesService } from '@/services/maps/placesService';
 import {
@@ -103,6 +104,10 @@ interface TripState {
   // Computed
   getTripSummaries: () => TripSummary[];
   getActiveTripDays: () => DayItinerary[];
+
+  // Sync
+  syncLocalTrips: () => Promise<void>;
+  isGuestMode: () => boolean;
 }
 
 export const useTripStore = create<TripState>()(
@@ -115,17 +120,21 @@ export const useTripStore = create<TripState>()(
       isLoading: false,
       error: null,
 
-      // Load all trips from Firebase
+      // Load all trips from Firebase or IndexedDB (guest mode)
       loadTrips: async () => {
         set({ isLoading: true, error: null });
         try {
           const userId = auth.currentUser?.uid;
-          if (!userId) {
-            set({ trips: [], activeTrip: null, activeTripId: null, isLoading: false });
-            return;
+          let trips: Trip[] = [];
+
+          if (userId) {
+            // Authenticated: load from Firebase
+            trips = await tripFirestoreService.getAll(userId);
+          } else {
+            // Guest mode: load from IndexedDB
+            trips = await tripRepository.getAll();
           }
 
-          const trips = await tripFirestoreService.getAll(userId);
           const activeTripId = get().activeTripId;
 
           // Find active trip if we have an ID
@@ -188,6 +197,9 @@ export const useTripStore = create<TripState>()(
           });
         }
 
+        const userId = auth.currentUser?.uid;
+        const isLocalOnly = !userId;
+
         const trip: Trip = {
           id: tripId,
           title: input.title,
@@ -213,12 +225,16 @@ export const useTripStore = create<TripState>()(
           packingEnabled: false,
           photosEnabled: false,
           defaultCurrency: input.defaultCurrency || 'USD',
+          isLocalOnly,
         };
 
-        // Save to Firebase
-        const userId = auth.currentUser?.uid;
-        if (!userId) throw new Error('Must be authenticated to create trips');
-        await tripFirestoreService.create(trip, userId);
+        // Save to Firebase or IndexedDB
+        if (userId) {
+          await tripFirestoreService.create(trip, userId);
+        } else {
+          // Guest mode: save to IndexedDB
+          await tripRepository.create(trip);
+        }
 
         // Update state
         set(state => ({
@@ -233,8 +249,15 @@ export const useTripStore = create<TripState>()(
       // Update trip
       updateTrip: async (tripId: TripId, updates: Partial<Trip>) => {
         const userId = auth.currentUser?.uid;
-        if (!userId) throw new Error('Must be authenticated to update trips');
-        await tripFirestoreService.update(tripId, updates, userId);
+        const trip = get().trips.find(t => t.id === tripId);
+
+        if (userId && !trip?.isLocalOnly) {
+          // Authenticated and cloud trip: update in Firebase
+          await tripFirestoreService.update(tripId, updates, userId);
+        } else {
+          // Guest mode or local trip: update in IndexedDB
+          await tripRepository.update(tripId, updates);
+        }
 
         set(state => ({
           trips: state.trips.map(t => (t.id === tripId ? { ...t, ...updates } : t)),
@@ -248,8 +271,15 @@ export const useTripStore = create<TripState>()(
       // Delete trip
       deleteTrip: async (tripId: TripId) => {
         const userId = auth.currentUser?.uid;
-        if (!userId) throw new Error('Must be authenticated to delete trips');
-        await tripFirestoreService.delete(tripId, userId);
+        const trip = get().trips.find(t => t.id === tripId);
+
+        if (userId && !trip?.isLocalOnly) {
+          // Authenticated and cloud trip: delete from Firebase
+          await tripFirestoreService.delete(tripId, userId);
+        } else {
+          // Guest mode or local trip: delete from IndexedDB
+          await tripRepository.delete(tripId);
+        }
 
         set(state => {
           const newTrips = state.trips.filter(t => t.id !== tripId);
@@ -283,6 +313,8 @@ export const useTripStore = create<TripState>()(
 
         const now = new Date().toISOString();
         const newTripId = nanoid() as TripId;
+        const userId = auth.currentUser?.uid;
+        const isLocalOnly = !userId;
 
         // Deep clone the itinerary with new IDs
         const newDays: DayItinerary[] = trip.itinerary.days.map(day => ({
@@ -302,6 +334,7 @@ export const useTripStore = create<TripState>()(
           createdAt: now,
           updatedAt: now,
           lastAccessedAt: now,
+          isLocalOnly,
           itinerary: {
             ...trip.itinerary,
             title: `${trip.itinerary.title} (Copy)`,
@@ -309,10 +342,13 @@ export const useTripStore = create<TripState>()(
           },
         };
 
-        // Save to Firebase
-        const userId = auth.currentUser?.uid;
-        if (!userId) throw new Error('Must be authenticated to duplicate trips');
-        await tripFirestoreService.create(newTrip, userId);
+        // Save to Firebase or IndexedDB
+        if (userId) {
+          await tripFirestoreService.create(newTrip, userId);
+        } else {
+          // Guest mode: save to IndexedDB
+          await tripRepository.create(newTrip);
+        }
 
         // Update state
         set(state => ({
@@ -903,6 +939,48 @@ export const useTripStore = create<TripState>()(
 
         await get().updateTrip(activeTrip.id, updatedTrip);
         // No sync queue for undo/redo - this is a local operation
+      },
+
+      // Sync local trips to cloud when user signs in
+      syncLocalTrips: async () => {
+        const userId = auth.currentUser?.uid;
+        if (!userId) return;
+
+        try {
+          // Get all local-only trips from IndexedDB
+          const localTrips = await tripRepository.getLocalOnly();
+
+          if (localTrips.length === 0) return;
+
+          console.log(`Syncing ${localTrips.length} local trips to cloud...`);
+
+          // Upload each local trip to Firebase
+          for (const trip of localTrips) {
+            const syncedTrip: Trip = {
+              ...trip,
+              isLocalOnly: false,
+            };
+
+            // Create in Firebase
+            await tripFirestoreService.create(syncedTrip, userId);
+
+            // Update local copy to mark as synced
+            await tripRepository.markAsSynced(trip.id);
+          }
+
+          // Reload trips to get fresh state
+          await get().loadTrips();
+
+          console.log('Local trips synced successfully');
+        } catch (error) {
+          console.error('Failed to sync local trips:', error);
+          throw error;
+        }
+      },
+
+      // Check if currently in guest mode
+      isGuestMode: () => {
+        return !auth.currentUser;
       },
     }),
     {

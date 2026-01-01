@@ -12,6 +12,9 @@ interface AuthState {
   _unsubscribeTrips: (() => void) | null;
   initialize: () => () => void;
   signInWithGoogle: () => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
+  signUpWithEmail: (email: string, password: string, displayName: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   clearError: () => void;
 }
@@ -45,6 +48,13 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       });
 
       if (user) {
+        // Sync any local trips created in guest mode
+        try {
+          await useTripStore.getState().syncLocalTrips();
+        } catch (error) {
+          console.error('Failed to sync local trips:', error);
+        }
+
         // Load trips initially
         await useTripStore.getState().loadTrips();
 
@@ -62,8 +72,8 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         );
         set({ _unsubscribeTrips: unsubscribe });
       } else {
-        // Clear trips on logout
-        useTripStore.setState({ trips: [], activeTrip: null, activeTripId: null });
+        // Guest mode: load local trips from IndexedDB
+        await useTripStore.getState().loadTrips();
       }
     });
   },
@@ -71,15 +81,68 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   signInWithGoogle: async () => {
     set({ isLoading: true, error: null });
     try {
-      // This will redirect to Google - the page will navigate away
       await authService.signInWithGoogle();
-      // Note: We won't reach here normally as the page redirects
-    } catch (error) {
-      // Only reached if redirect fails to start
+    } catch (error: any) {
       set({
-        error: error instanceof Error ? error.message : 'Sign in failed',
+        error: error.message || 'Sign in with Google failed',
         isLoading: false
       });
+    }
+  },
+
+  signInWithEmail: async (email: string, password: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      await authService.signInWithEmail(email, password);
+    } catch (error: any) {
+      let message = 'Sign in failed';
+      if (error.code === 'auth/user-not-found') {
+        message = 'No account found with this email';
+      } else if (error.code === 'auth/wrong-password') {
+        message = 'Incorrect password';
+      } else if (error.code === 'auth/invalid-email') {
+        message = 'Invalid email address';
+      } else if (error.code === 'auth/invalid-credential') {
+        message = 'Invalid email or password';
+      }
+      set({ error: message, isLoading: false });
+      throw new Error(message);
+    }
+  },
+
+  signUpWithEmail: async (email: string, password: string, displayName: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      await authService.signUpWithEmail(email, password, displayName);
+    } catch (error: any) {
+      let message = 'Sign up failed';
+      if (error.code === 'auth/email-already-in-use') {
+        message = 'An account with this email already exists';
+      } else if (error.code === 'auth/weak-password') {
+        message = 'Password should be at least 6 characters';
+      } else if (error.code === 'auth/invalid-email') {
+        message = 'Invalid email address';
+      }
+      set({ error: message, isLoading: false });
+      throw new Error(message);
+    }
+  },
+
+  resetPassword: async (email: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      await authService.resetPassword(email);
+    } catch (error: any) {
+      let message = 'Password reset failed';
+      if (error.code === 'auth/user-not-found') {
+        message = 'No account found with this email';
+      } else if (error.code === 'auth/invalid-email') {
+        message = 'Invalid email address';
+      }
+      set({ error: message, isLoading: false });
+      throw new Error(message);
+    } finally {
+      set({ isLoading: false });
     }
   },
 

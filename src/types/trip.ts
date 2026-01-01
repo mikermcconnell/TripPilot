@@ -63,6 +63,9 @@ export interface Trip {
 
   // Settings
   defaultCurrency: string;  // ISO 4217: 'USD', 'EUR'
+
+  // Local/Guest mode flag - true if trip is only stored locally (not synced to cloud)
+  isLocalOnly?: boolean;
 }
 
 /**
