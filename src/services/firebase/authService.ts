@@ -24,6 +24,8 @@ export const authService = {
 
   async handleRedirectResult(): Promise<User | null> {
     console.log('Checking for redirect result...');
+    console.log('Current URL:', window.location.href);
+    console.log('Auth current user:', auth.currentUser?.email || 'none');
     try {
       const result = await getRedirectResult(auth);
       console.log('Redirect result:', result ? `user: ${result.user?.email}` : 'no pending redirect');
@@ -34,8 +36,10 @@ export const authService = {
         return result.user;
       }
       return null;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error handling redirect result:', error);
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
       throw error;
     }
   },
