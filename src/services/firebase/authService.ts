@@ -1,6 +1,5 @@
 import {
-  signInWithRedirect,
-  getRedirectResult,
+  signInWithPopup,
   GoogleAuthProvider,
   signOut as firebaseSignOut,
   onAuthStateChanged,
@@ -17,31 +16,11 @@ import type { UserProfile } from '@/types/auth';
 const googleProvider = new GoogleAuthProvider();
 
 export const authService = {
-  async signInWithGoogle(): Promise<void> {
-    console.log('Starting Google sign-in with redirect...');
-    await signInWithRedirect(auth, googleProvider);
-  },
-
-  async handleRedirectResult(): Promise<User | null> {
-    console.log('Checking for redirect result...');
-    console.log('Current URL:', window.location.href);
-    console.log('Auth current user:', auth.currentUser?.email || 'none');
-    try {
-      const result = await getRedirectResult(auth);
-      console.log('Redirect result:', result ? `user: ${result.user?.email}` : 'no pending redirect');
-      if (result?.user) {
-        console.log('Creating/updating user profile...');
-        await this.createOrUpdateUserProfile(result.user);
-        console.log('User profile ready');
-        return result.user;
-      }
-      return null;
-    } catch (error: any) {
-      console.error('Error handling redirect result:', error);
-      console.error('Error code:', error.code);
-      console.error('Error message:', error.message);
-      throw error;
-    }
+  async signInWithGoogle(): Promise<User> {
+    console.log('Starting Google sign-in with popup...');
+    const result = await signInWithPopup(auth, googleProvider);
+    await this.createOrUpdateUserProfile(result.user);
+    return result.user;
   },
 
   async signUpWithEmail(email: string, password: string, displayName: string): Promise<User> {

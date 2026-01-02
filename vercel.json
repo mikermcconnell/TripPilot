@@ -1,8 +1,2 @@
 {
-  "rewrites": [
-    {
-      "source": "/__/auth/:path*",
-      "destination": "https://trippilot-10e60.firebaseapp.com/__/auth/:path*"
-    }
-  ]
 }

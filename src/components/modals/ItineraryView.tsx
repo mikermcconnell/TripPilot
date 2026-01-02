@@ -1,7 +1,28 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { DayItinerary, Activity, LocationData } from '@/types';
-import { Calendar, MapPin, Coffee, Bed, Car, Camera, Trash2, GripVertical, Sunrise, Sun, Moon, Clock, Plus } from 'lucide-react';
+import { Calendar, MapPin, Coffee, Bed, Car, Camera, Trash2, GripVertical, Sunrise, Sun, Moon, Clock, Plus, X } from 'lucide-react';
+import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { ActivityDetail } from '@/components/features/activity/ActivityDetail';
+
+/**
+ * Get day of month from ISO date string
+ */
+function getDayOfMonth(isoDate: string): number {
+  const date = new Date(isoDate + 'T00:00:00');
+  return date.getDate();
+}
+
+/**
+ * Format date for day header - shows "Mon, Jan 15" format
+ */
+function formatDayHeaderDate(isoDate: string): string {
+  const date = new Date(isoDate + 'T00:00:00');
+  return date.toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+}
 import { ActivityEditModal } from '@/components/features/activity/ActivityEditModal';
 import { AddDayModal } from '@/components/features/day/AddDayModal';
 import { AddActivityModal } from '@/components/features/activity/AddActivityModal';
@@ -355,6 +376,7 @@ interface SortableDayCardProps {
   onActivityHover: (id: string | null) => void;
   onActivitySelect: (id: string | null) => void;
   onDeleteActivity: (dayId: string, activityId: string) => void;
+  onDeleteDay: (dayId: string) => void;
   hoveredActivityId: string | null;
   selectedActivityId: string | null;
   handleActivityClick: (activity: Activity, dayId: string) => void;
@@ -373,6 +395,7 @@ function SortableDayCard({
   onActivityHover,
   onActivitySelect,
   onDeleteActivity,
+  onDeleteDay,
   hoveredActivityId,
   selectedActivityId,
   handleActivityClick,
@@ -452,13 +475,13 @@ function SortableDayCard({
                   ? 'bg-blue-500 border-blue-700 text-white'
                   : 'bg-slate-200 border-slate-300 text-slate-500'}
               `}>
-                {day.dayNumber}
+                {getDayOfMonth(day.date)}
               </div>
               <div>
                 <h3 className={`font-bold text-lg ${isActive ? 'text-blue-900' : 'text-slate-700'}`}>
-                  Day {day.dayNumber}
+                  {formatDayHeaderDate(day.date)}
                 </h3>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">{day.date}</p>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Day {day.dayNumber}</p>
               </div>
             </div>
 
@@ -481,6 +504,18 @@ function SortableDayCard({
                   <div className="text-[10px] font-bold text-slate-400 uppercase">Activities</div>
                 </div>
               )}
+
+              {/* Delete Day Button */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteDay(day.id);
+                }}
+                className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                title="Delete day"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
           </div>
         </div>
@@ -598,7 +633,11 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({
   const [addActivityModalOpen, setAddActivityModalOpen] = useState(false);
   const [addActivityDayInfo, setAddActivityDayInfo] = useState<{ dayNumber: number; dayId: string; period: TimePeriod } | null>(null);
 
-  const { reorderActivitiesInDay, moveActivityBetweenDays, addDayWithLocation, addActivity, updateDayLocation, resetDayLocation, updateDayTravel, reorderDays } = useTripStore();
+  // State for Delete Day Confirmation
+  const [deleteDayId, setDeleteDayId] = useState<string | null>(null);
+  const deleteDayInfo = deleteDayId ? days.find(d => d.id === deleteDayId) : null;
+
+  const { reorderActivitiesInDay, moveActivityBetweenDays, addDayWithLocation, addActivity, updateDayLocation, resetDayLocation, updateDayTravel, reorderDays, removeDayById } = useTripStore();
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -774,6 +813,18 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({
     }
   };
 
+  // Handler for deleting a day
+  const handleDeleteDay = async () => {
+    if (!deleteDayId) return;
+    try {
+      // Delete the day and its activities
+      await removeDayById(deleteDayId, 'delete');
+      setDeleteDayId(null);
+    } catch (error) {
+      console.error('Failed to delete day:', error);
+    }
+  };
+
   if (!days || days.length === 0) {
     return (
       <div className="h-full bg-gradient-to-b from-emerald-50/50 to-slate-50/30">
@@ -854,6 +905,7 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({
                     onActivityHover={onActivityHover}
                     onActivitySelect={onActivitySelect}
                     onDeleteActivity={onDeleteActivity}
+                    onDeleteDay={setDeleteDayId}
                     hoveredActivityId={hoveredActivityId}
                     selectedActivityId={selectedActivityId}
                     handleActivityClick={handleActivityClick}
@@ -938,6 +990,21 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({
           locationBias={days.find(d => d.id === addActivityDayInfo.dayId)?.primaryLocation?.coordinates}
         />
       )}
+
+      {/* Delete Day Confirmation */}
+      <ConfirmDialog
+        isOpen={!!deleteDayId}
+        title="Delete Day"
+        message={deleteDayInfo
+          ? `Are you sure you want to delete ${formatDayHeaderDate(deleteDayInfo.date)} (Day ${deleteDayInfo.dayNumber})? This will also delete all ${deleteDayInfo.activities.length} activities in this day.`
+          : 'Are you sure you want to delete this day?'
+        }
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        onConfirm={handleDeleteDay}
+        onClose={() => setDeleteDayId(null)}
+      />
     </DndContext>
   );
 };

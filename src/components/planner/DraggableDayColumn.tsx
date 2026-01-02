@@ -95,11 +95,11 @@ export function DraggableDayColumn({
           {/* Day Info */}
           <div className="flex-1 min-w-0">
             <div className="font-semibold text-lg text-gray-900">
-              Day {day.dayNumber}
+              {format(parseISO(day.date), 'EEE, MMM d')}
             </div>
             <div className="flex items-center gap-1 text-sm text-gray-600">
               <Calendar size={14} />
-              <span>{format(parseISO(day.date), 'EEE, MMM d')}</span>
+              <span>Day {day.dayNumber}</span>
             </div>
           </div>
 

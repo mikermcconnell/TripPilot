@@ -3,11 +3,27 @@ import { Itinerary, InterDayTravelMode } from '@/types';
 import { MapPin, Car, Footprints, Train, Maximize2, Focus, ChevronDown, Plane, Bus, Ship, MoreHorizontal } from 'lucide-react';
 import { Map, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
 import { getDistanceKm, getRecommendedMode, getDepartureTime } from '@/utils/geo';
-import { LiveLocationMarker } from '@/components/maps/LiveLocationMarker'; 
+import { LiveLocationMarker } from '@/components/maps/LiveLocationMarker';
 
 // Declare google variable to resolve TypeScript errors
 import type { GoogleMapsAPI } from '@/types/maps';
 declare const google: GoogleMapsAPI;
+
+/**
+ * Get day of month from ISO date string
+ */
+function getDayOfMonth(isoDate: string): number {
+  const date = new Date(isoDate + 'T00:00:00');
+  return date.getDate();
+}
+
+/**
+ * Get month abbreviation from ISO date string
+ */
+function getMonthAbbrev(isoDate: string): string {
+  const date = new Date(isoDate + 'T00:00:00');
+  return date.toLocaleDateString(undefined, { month: 'short' });
+}
 
 declare global {
   interface Window {
@@ -499,7 +515,7 @@ const MapView: React.FC<MapViewProps> = ({
 
   // Get day-level primary locations (cities)
   const displayedDayLocations = useMemo(() => {
-    let dayLocations: { dayId: string, dayNumber: number, location: any }[] = [];
+    let dayLocations: { dayId: string, dayNumber: number, date: string, location: any }[] = [];
 
     if (!itinerary?.days) return dayLocations;
 
@@ -511,6 +527,7 @@ const MapView: React.FC<MapViewProps> = ({
           dayLocations.push({
             dayId: day.id,
             dayNumber: day.dayNumber,
+            date: day.date,
             location
           });
         }
@@ -525,6 +542,7 @@ const MapView: React.FC<MapViewProps> = ({
           dayLocations.push({
             dayId: day.id,
             dayNumber: day.dayNumber,
+            date: day.date,
             location
           });
         }
@@ -800,10 +818,11 @@ const MapView: React.FC<MapViewProps> = ({
 
                // For single day, show simple marker
                if (!isMultipleDays) {
-                 const { dayId, dayNumber, location } = group.days[0];
+                 const { dayId, date, location } = group.days[0];
                  const isDayHighlighted = hoveredDayId === dayId;
                  const isActiveDayLocation = activeDayId === dayId;
                  const isSingleActive = isDayHighlighted || isActiveDayLocation;
+                 const dayOfMonth = getDayOfMonth(date);
 
                  return (
                    <AdvancedMarker
@@ -826,12 +845,12 @@ const MapView: React.FC<MapViewProps> = ({
                            }
                          `}
                        >
-                         {dayNumber}
+                         {dayOfMonth}
                        </div>
                        <div
                          className={`absolute -top-10 left-1/2 -translate-x-1/2 bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow-xl whitespace-nowrap z-50 pointer-events-none transition-opacity duration-200 ${isSingleActive ? 'opacity-100' : 'opacity-0 invisible'}`}
                        >
-                         Day {dayNumber}: {location.name}
+                         {getMonthAbbrev(date)} {dayOfMonth}: {location.name}
                          <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-emerald-700 rotate-45"></div>
                        </div>
                      </div>
@@ -840,6 +859,15 @@ const MapView: React.FC<MapViewProps> = ({
                }
 
                // For multiple days at same location, show grouped marker with callout
+               // Check if days span multiple months
+               const months = new Set(group.days.map(d => getMonthAbbrev(d.date)));
+               const spansMultipleMonths = months.size > 1;
+
+               // Format the display string for grouped days
+               const groupedDaysDisplay = spansMultipleMonths
+                 ? group.days.map(d => `${getMonthAbbrev(d.date).charAt(0)}${getDayOfMonth(d.date)}`).join(', ')
+                 : group.days.map(d => getDayOfMonth(d.date)).join(', ');
+
                return (
                  <AdvancedMarker
                    key={`day-group-${group.id}`}
@@ -864,7 +892,7 @@ const MapView: React.FC<MapViewProps> = ({
                          }
                        `}
                      >
-                       <span>{group.days.map(d => d.dayNumber).join(', ')}</span>
+                       <span>{groupedDaysDisplay}</span>
                        <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                      </div>
 
@@ -877,7 +905,7 @@ const MapView: React.FC<MapViewProps> = ({
                          </div>
                          {/* Days list */}
                          <div className="p-1">
-                           {group.days.map(({ dayId, dayNumber }) => {
+                           {group.days.map(({ dayId, date }) => {
                              const isThisDayActive = activeDayId === dayId;
                              return (
                                <button
@@ -896,7 +924,7 @@ const MapView: React.FC<MapViewProps> = ({
                                    }
                                  `}
                                >
-                                 Day {dayNumber}
+                                 {getMonthAbbrev(date)} {getDayOfMonth(date)}
                                </button>
                              );
                            })}
@@ -1010,7 +1038,11 @@ const MapView: React.FC<MapViewProps> = ({
                 title="Focused on current day"
               >
                 <Focus className="w-5 h-5" />
-                <span>Day {itinerary.days.find(d => d.id === activeDayId)?.dayNumber || ''}</span>
+                <span>{(() => {
+                  const activeDay = itinerary.days.find(d => d.id === activeDayId);
+                  if (!activeDay) return '';
+                  return `${getMonthAbbrev(activeDay.date)} ${getDayOfMonth(activeDay.date)}`;
+                })()}</span>
               </button>
             )}
           </div>
