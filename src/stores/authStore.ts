@@ -28,12 +28,20 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
   initialize: () => {
     // Handle redirect result on page load (for sign-in redirect flow)
-    authService.handleRedirectResult().catch((error) => {
-      console.error('Redirect result error:', error);
-      set({ error: error instanceof Error ? error.message : 'Sign in failed' });
-    });
+    authService.handleRedirectResult()
+      .then((user) => {
+        if (user) {
+          console.log('Redirect sign-in successful:', user.email);
+        }
+      })
+      .catch((error) => {
+        console.error('Redirect result error:', error);
+        set({ error: error instanceof Error ? error.message : 'Sign in failed', isLoading: false });
+      });
 
     return authService.onAuthStateChange(async (user) => {
+      console.log('Auth state changed:', user ? user.email : 'signed out');
+
       // Cleanup previous listener if exists
       const currentUnsubscribe = get()._unsubscribeTrips;
       if (currentUnsubscribe) {
@@ -56,24 +64,36 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         }
 
         // Load trips initially
-        await useTripStore.getState().loadTrips();
+        try {
+          await useTripStore.getState().loadTrips();
+        } catch (error) {
+          console.error('Failed to load trips:', error);
+        }
 
         // Set up real-time listener for trip updates
-        const unsubscribe = tripFirestoreService.subscribeToTrips(
-          user.uid,
-          (trips) => {
-            const currentActiveTripId = useTripStore.getState().activeTripId;
-            const activeTrip = trips.find(t => t.id === currentActiveTripId) || null;
-            useTripStore.setState({ trips, activeTrip });
-          },
-          (error) => {
-            console.error('Trips subscription error:', error);
-          }
-        );
-        set({ _unsubscribeTrips: unsubscribe });
+        try {
+          const unsubscribe = tripFirestoreService.subscribeToTrips(
+            user.uid,
+            (trips) => {
+              const currentActiveTripId = useTripStore.getState().activeTripId;
+              const activeTrip = trips.find(t => t.id === currentActiveTripId) || null;
+              useTripStore.setState({ trips, activeTrip });
+            },
+            (error) => {
+              console.error('Trips subscription error:', error);
+            }
+          );
+          set({ _unsubscribeTrips: unsubscribe });
+        } catch (error) {
+          console.error('Failed to set up trips subscription:', error);
+        }
       } else {
         // Guest mode: load local trips from IndexedDB
-        await useTripStore.getState().loadTrips();
+        try {
+          await useTripStore.getState().loadTrips();
+        } catch (error) {
+          console.error('Failed to load local trips:', error);
+        }
       }
     });
   },
