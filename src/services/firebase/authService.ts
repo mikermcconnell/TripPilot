@@ -1,6 +1,5 @@
 import {
-  signInWithRedirect,
-  getRedirectResult,
+  signInWithPopup,
   GoogleAuthProvider,
   signOut as firebaseSignOut,
   onAuthStateChanged,
@@ -17,10 +16,12 @@ import type { UserProfile } from '@/types/auth';
 const googleProvider = new GoogleAuthProvider();
 
 export const authService = {
-  async signInWithGoogle(): Promise<void> {
-    // Use redirect-only flow (more reliable for deployed apps with COOP headers)
-    console.log('Starting Google sign-in with redirect...');
-    await signInWithRedirect(auth, googleProvider);
+  async signInWithGoogle(): Promise<User> {
+    // Use popup flow (works better with COOP headers on Vercel)
+    console.log('Starting Google sign-in with popup...');
+    const result = await signInWithPopup(auth, googleProvider);
+    await this.createOrUpdateUserProfile(result.user);
+    return result.user;
   },
 
   async signUpWithEmail(email: string, password: string, displayName: string): Promise<User> {
@@ -42,24 +43,6 @@ export const authService = {
 
   async resetPassword(email: string): Promise<void> {
     await sendPasswordResetEmail(auth, email);
-  },
-
-  async handleRedirectResult(): Promise<User | null> {
-    console.log('Checking for redirect result...');
-    try {
-      const result = await getRedirectResult(auth);
-      console.log('Redirect result:', result ? `user: ${result.user?.email}` : 'no pending redirect');
-      if (result?.user) {
-        console.log('Creating/updating user profile...');
-        await this.createOrUpdateUserProfile(result.user);
-        console.log('User profile ready');
-        return result.user;
-      }
-      return null;
-    } catch (error) {
-      console.error('Error handling redirect result:', error);
-      throw error;
-    }
   },
 
   async signOut(): Promise<void> {

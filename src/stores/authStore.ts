@@ -29,12 +29,6 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   initialize: () => {
     console.log('Initializing auth...');
 
-    // Check for redirect result from Google Sign-In
-    // This must be called on page load to complete redirect-based auth
-    authService.handleRedirectResult().catch((error) => {
-      console.error('Error processing redirect result:', error);
-    });
-
     return authService.onAuthStateChange(async (user) => {
       console.log('Auth state changed:', user ? user.email : 'signed out');
 
@@ -104,16 +98,21 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   signInWithGoogle: async () => {
     set({ isLoading: true, error: null });
     try {
-      // This will redirect away from the page, so isLoading stays true
-      // When user returns, handleRedirectResult will process the sign-in
       await authService.signInWithGoogle();
-      // Note: Code below this won't run because of redirect
+      // onAuthStateChanged will handle setting the user
     } catch (error: any) {
       console.error('Sign in with Google error:', error);
+      let message = 'Sign in with Google failed';
+      if (error.code === 'auth/popup-closed-by-user') {
+        message = 'Sign-in cancelled';
+      } else if (error.code === 'auth/popup-blocked') {
+        message = 'Popup was blocked. Please allow popups for this site.';
+      }
       set({
-        error: error.message || 'Sign in with Google failed',
+        error: message,
         isLoading: false
       });
+      throw new Error(message);
     }
   },
 
