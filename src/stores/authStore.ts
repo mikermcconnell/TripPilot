@@ -29,8 +29,12 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   initialize: () => {
     console.log('Initializing auth...');
 
-    // onAuthStateChanged automatically handles redirect results
-    // No need to call getRedirectResult() explicitly
+    // Check for redirect result from Google Sign-In
+    // This must be called on page load to complete redirect-based auth
+    authService.handleRedirectResult().catch((error) => {
+      console.error('Error processing redirect result:', error);
+    });
+
     return authService.onAuthStateChange(async (user) => {
       console.log('Auth state changed:', user ? user.email : 'signed out');
 
