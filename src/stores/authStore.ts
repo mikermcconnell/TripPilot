@@ -101,8 +101,12 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   signInWithGoogle: async () => {
     set({ isLoading: true, error: null });
     try {
+      // This will redirect away from the page, so isLoading stays true
+      // When user returns, handleRedirectResult will process the sign-in
       await authService.signInWithGoogle();
+      // Note: Code below this won't run because of redirect
     } catch (error: any) {
+      console.error('Sign in with Google error:', error);
       set({
         error: error.message || 'Sign in with Google failed',
         isLoading: false

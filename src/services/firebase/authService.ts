@@ -1,6 +1,5 @@
 import {
   signInWithRedirect,
-  signInWithPopup,
   getRedirectResult,
   GoogleAuthProvider,
   signOut as firebaseSignOut,
@@ -19,26 +18,9 @@ const googleProvider = new GoogleAuthProvider();
 
 export const authService = {
   async signInWithGoogle(): Promise<void> {
-    // Try popup first, fall back to redirect if COOP issues
-    try {
-      console.log('Attempting Google sign-in with popup...');
-      const result = await signInWithPopup(auth, googleProvider);
-      console.log('Popup sign-in result:', result?.user?.email);
-      if (result?.user) {
-        console.log('Creating/updating user profile...');
-        await this.createOrUpdateUserProfile(result.user);
-        console.log('User profile created/updated successfully');
-      }
-    } catch (error: any) {
-      console.log('Popup sign-in error:', error.code, error.message);
-      // If popup blocked or COOP issue, use redirect
-      if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user') {
-        console.log('Falling back to redirect sign-in...');
-        await signInWithRedirect(auth, googleProvider);
-      } else {
-        throw error;
-      }
-    }
+    // Use redirect-only flow (more reliable for deployed apps with COOP headers)
+    console.log('Starting Google sign-in with redirect...');
+    await signInWithRedirect(auth, googleProvider);
   },
 
   async signUpWithEmail(email: string, password: string, displayName: string): Promise<User> {
@@ -63,10 +45,14 @@ export const authService = {
   },
 
   async handleRedirectResult(): Promise<User | null> {
+    console.log('Checking for redirect result...');
     try {
       const result = await getRedirectResult(auth);
+      console.log('Redirect result:', result ? `user: ${result.user?.email}` : 'no pending redirect');
       if (result?.user) {
+        console.log('Creating/updating user profile...');
         await this.createOrUpdateUserProfile(result.user);
+        console.log('User profile ready');
         return result.user;
       }
       return null;
