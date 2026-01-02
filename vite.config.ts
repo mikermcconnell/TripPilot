@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => {
       react(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['icons/*.png', 'robots.txt'],
+        includeAssets: ['icons/*.png', 'icons/*.svg', 'robots.txt'],
         manifest: {
           name: 'TripPilot - AI Travel Planner',
           short_name: 'TripPilot',
@@ -24,6 +24,11 @@ export default defineConfig(({ mode }) => {
           start_url: '/',
           icons: [
             {
+              src: '/icons/favicon-48.png',
+              sizes: '48x48',
+              type: 'image/png'
+            },
+            {
               src: '/icons/icon-192.png',
               sizes: '192x192',
               type: 'image/png'
@@ -31,14 +36,19 @@ export default defineConfig(({ mode }) => {
             {
               src: '/icons/icon-512.png',
               sizes: '512x512',
+              type: 'image/png'
+            },
+            {
+              src: '/icons/icon-512.png',
+              sizes: '512x512',
               type: 'image/png',
-              purpose: 'any maskable'
+              purpose: 'maskable'
             }
           ]
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-          navigateFallbackDenylist: [/^\/api/, /^\/auth/],
+          navigateFallback: null, // Disable SW navigation fallback to fix Firebase auth redirect
           // Don't let the service worker intercept Google Maps/Firebase requests
           // This prevents CSP test failures and network errors
           runtimeCaching: [
