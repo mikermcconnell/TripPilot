@@ -27,18 +27,10 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   _unsubscribeTrips: null,
 
   initialize: () => {
-    // Handle redirect result on page load (for sign-in redirect flow)
-    authService.handleRedirectResult()
-      .then((user) => {
-        if (user) {
-          console.log('Redirect sign-in successful:', user.email);
-        }
-      })
-      .catch((error) => {
-        console.error('Redirect result error:', error);
-        set({ error: error instanceof Error ? error.message : 'Sign in failed', isLoading: false });
-      });
+    console.log('Initializing auth...');
 
+    // onAuthStateChanged automatically handles redirect results
+    // No need to call getRedirectResult() explicitly
     return authService.onAuthStateChange(async (user) => {
       console.log('Auth state changed:', user ? user.email : 'signed out');
 
@@ -56,6 +48,13 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       });
 
       if (user) {
+        // Create/update user profile in Firestore (for new sign-ups or first Google sign-in)
+        try {
+          await authService.createOrUpdateUserProfile(user);
+        } catch (error) {
+          console.error('Failed to create/update user profile:', error);
+        }
+
         // Sync any local trips created in guest mode
         try {
           await useTripStore.getState().syncLocalTrips();
